@@ -44,6 +44,7 @@ tr:hover{background:#f8f8fa}
 .summary{padding:14px;border-radius:8px;font-weight:600;font-size:14px;margin-top:10px;text-align:center}
 .summary.green{background:#d4edda;color:#155724}.summary.red{background:#f8d7da;color:#721c24}.summary.orange{background:#fff3cd;color:#856404}
 .hint{font-size:12px;color:#999;margin-top:4px}
+.field .path-display.dragover{border-color:#0071e3;background:#eef6ff;color:#0071e3}
 </style>
 </head>
 <body>
@@ -223,9 +224,9 @@ function buildPanels() {
   <div class="panel active" id="p-compare">
     <div class="card">
       <h3>Compare Two Folders</h3>
-      <div class="field"><label>Folder A:</label><div class="path-display empty" id="cmp-a-path">No folder selected</div><button class="btn btn-browse" onclick="$('fi-cmp-a').click()">Browse</button></div>
-      <div class="field"><label>Folder B:</label><div class="path-display empty" id="cmp-b-path">No folder selected</div><button class="btn btn-browse" onclick="$('fi-cmp-b').click()">Browse</button></div>
-      <p class="hint">Select two folders to compare. Files are matched by relative path and verified by SHA-256 hash.</p>
+      <div class="field"><label>Folder A:</label><div class="path-display empty" id="cmp-a-path">Drop folder here or click Browse</div><button class="btn btn-browse" onclick="$('fi-cmp-a').click()">Browse</button></div>
+      <div class="field"><label>Folder B:</label><div class="path-display empty" id="cmp-b-path">Drop folder here or click Browse</div><button class="btn btn-browse" onclick="$('fi-cmp-b').click()">Browse</button></div>
+      <p class="hint">Select or drag-and-drop two folders to compare. Files are matched by relative path and verified by SHA-256 hash.</p>
       <div class="btn-row">
         <button class="btn btn-primary" id="cmp-start" onclick="startCompare()">Start Compare</button>
         <button class="btn btn-danger" id="cmp-stop" onclick="stopAll()" disabled>Stop</button>
@@ -242,9 +243,9 @@ function buildPanels() {
   <div class="panel" id="p-files">
     <div class="card">
       <h3>Compare Two Files</h3>
-      <div class="field"><label>File A:</label><div class="path-display empty" id="fca-path">No file selected</div><button class="btn btn-browse" onclick="$('fi-file-a').click()">Browse</button></div>
-      <div class="field"><label>File B:</label><div class="path-display empty" id="fcb-path">No file selected</div><button class="btn btn-browse" onclick="$('fi-file-b').click()">Browse</button></div>
-      <p class="hint">Select two individual files to compare their SHA-256 hashes.</p>
+      <div class="field"><label>File A:</label><div class="path-display empty" id="fca-path">Drop file here or click Browse</div><button class="btn btn-browse" onclick="$('fi-file-a').click()">Browse</button></div>
+      <div class="field"><label>File B:</label><div class="path-display empty" id="fcb-path">Drop file here or click Browse</div><button class="btn btn-browse" onclick="$('fi-file-b').click()">Browse</button></div>
+      <p class="hint">Select or drag-and-drop two files to compare their SHA-256 hashes.</p>
       <div class="btn-row">
         <button class="btn btn-primary" id="fc-start" onclick="startFileCompare()">Compare</button>
         <button class="btn btn-danger" id="fc-stop" onclick="stopAll()" disabled>Stop</button>
@@ -262,8 +263,8 @@ function buildPanels() {
   <div class="panel" id="p-generate">
     <div class="card">
       <h3>Generate Checksum File</h3>
-      <div class="field"><label>Source Folder:</label><div class="path-display empty" id="gen-path">No folder selected</div><button class="btn btn-browse" onclick="$('fi-gen').click()">Browse</button></div>
-      <p class="hint">Generates a SHA-256 checksum file for all files in the folder. Download the file to use on another machine.</p>
+      <div class="field"><label>Source Folder:</label><div class="path-display empty" id="gen-path">Drop folder here or click Browse</div><button class="btn btn-browse" onclick="$('fi-gen').click()">Browse</button></div>
+      <p class="hint">Select or drag-and-drop a folder. Generates a SHA-256 checksum file for all files. Download to use on another machine.</p>
       <div class="btn-row">
         <button class="btn btn-success" id="gen-start" onclick="startGenerate()">Generate</button>
         <button class="btn btn-danger" id="gen-stop" onclick="stopAll()" disabled>Stop</button>
@@ -278,8 +279,8 @@ function buildPanels() {
   <div class="panel" id="p-verify">
     <div class="card">
       <h3>Verify Files Against Checksum</h3>
-      <div class="field"><label>Checksum File:</label><div class="path-display empty" id="ver-cs-path">No file selected</div><button class="btn btn-browse" onclick="$('fi-ver-cs').click()">Browse</button></div>
-      <div class="field"><label>Target Folder:</label><div class="path-display empty" id="ver-dir-path">No folder selected</div><button class="btn btn-browse" onclick="$('fi-ver-dir').click()">Browse</button></div>
+      <div class="field"><label>Checksum File:</label><div class="path-display empty" id="ver-cs-path">Drop .txt file here or click Browse</div><button class="btn btn-browse" onclick="$('fi-ver-cs').click()">Browse</button></div>
+      <div class="field"><label>Target Folder:</label><div class="path-display empty" id="ver-dir-path">Drop folder here or click Browse</div><button class="btn btn-browse" onclick="$('fi-ver-dir').click()">Browse</button></div>
       <div class="field" style="margin-top:6px">
         <label></label>
         <label style="width:auto;display:flex;align-items:center;gap:6px;cursor:pointer">
@@ -336,6 +337,94 @@ $('fi-ver-cs').addEventListener('change', async function() {
     el.classList.remove('empty');
   }
 });
+
+// ==================== Drag & Drop ====================
+async function traverseEntry(entry) {
+  if (entry.isFile) {
+    return new Promise(resolve => entry.file(f => {
+      f._fullPath = entry.fullPath;
+      resolve([f]);
+    }));
+  }
+  if (entry.isDirectory) {
+    const reader = entry.createReader();
+    const all = [];
+    const readBatch = () => new Promise(resolve => reader.readEntries(resolve));
+    let batch;
+    do { batch = await readBatch(); for (const e of batch) all.push(...await traverseEntry(e)); } while (batch.length);
+    return all;
+  }
+  return [];
+}
+
+function collectDroppedFolder(files, rootName) {
+  const filtered = files.filter(f => !f.name.startsWith('.'));
+  if (!filtered.length) return { name: '', files: [] };
+  return {
+    name: rootName || 'drop',
+    files: filtered.map(f => {
+      let rel = (f._fullPath || '/' + f.name).replace(/^\/[^/]*\//, '');
+      if (!rel) rel = f.name;
+      return { rel, file: f };
+    }).sort((a, b) => a.rel.localeCompare(b.rel))
+  };
+}
+
+function setupDrop(displayId, inputId, handler) {
+  const el = document.getElementById(displayId);
+  if (!el) return;
+  el.addEventListener('dragover', e => { e.preventDefault(); e.stopPropagation(); el.classList.add('dragover'); });
+  el.addEventListener('dragleave', e => { e.preventDefault(); e.stopPropagation(); el.classList.remove('dragover'); });
+  el.addEventListener('drop', async e => {
+    e.preventDefault(); e.stopPropagation(); el.classList.remove('dragover');
+    const items = e.dataTransfer.items;
+    if (!items || !items.length) return;
+    const entries = [];
+    for (const item of items) {
+      const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
+      if (entry) entries.push(entry);
+    }
+    if (!entries.length) return;
+    if (entries[0].isDirectory) {
+      const allFiles = await traverseEntry(entries[0]);
+      handler(allFiles, entries[0].name);
+    } else {
+      const files = Array.from(e.dataTransfer.files);
+      handler(files, null);
+    }
+  });
+}
+
+function initDropZones() {
+  setupDrop('cmp-a-path', 'fi-cmp-a', (files, name) => {
+    cmpA = collectDroppedFolder(files, name);
+    const el = $('cmp-a-path'); el.textContent = cmpA.name + ' (' + cmpA.files.length + ' files)'; el.classList.remove('empty');
+  });
+  setupDrop('cmp-b-path', 'fi-cmp-b', (files, name) => {
+    cmpB = collectDroppedFolder(files, name);
+    const el = $('cmp-b-path'); el.textContent = cmpB.name + ' (' + cmpB.files.length + ' files)'; el.classList.remove('empty');
+  });
+  setupDrop('gen-path', 'fi-gen', (files, name) => {
+    genData = collectDroppedFolder(files, name);
+    const el = $('gen-path'); el.textContent = genData.name + ' (' + genData.files.length + ' files)'; el.classList.remove('empty');
+  });
+  setupDrop('ver-dir-path', 'fi-ver-dir', (files, name) => {
+    verDir = collectDroppedFolder(files, name);
+    const el = $('ver-dir-path'); el.textContent = verDir.name + ' (' + verDir.files.length + ' files)'; el.classList.remove('empty');
+  });
+  setupDrop('ver-cs-path', 'fi-ver-cs', async (files) => {
+    if (files.length && files[0].name.endsWith('.txt')) {
+      verCsText = await files[0].text();
+      const el = $('ver-cs-path'); el.textContent = files[0].name; el.classList.remove('empty');
+    }
+  });
+  setupDrop('fca-path', 'fi-file-a', (files) => {
+    if (files.length) { fcFileA = files[0]; const el = $('fca-path'); el.textContent = fcFileA.name + ' (' + (fcFileA.size/1024/1024).toFixed(1) + ' MB)'; el.classList.remove('empty'); }
+  });
+  setupDrop('fcb-path', 'fi-file-b', (files) => {
+    if (files.length) { fcFileB = files[0]; const el = $('fcb-path'); el.textContent = fcFileB.name + ' (' + (fcFileB.size/1024/1024).toFixed(1) + ' MB)'; el.classList.remove('empty'); }
+  });
+}
 
 // ==================== File Compare Data ====================
 let fcFileA = null, fcFileB = null;
@@ -717,6 +806,7 @@ function saveReport(prefix) {
 // ==================== Init ====================
 buildTabs();
 buildPanels();
+initDropZones();
 </script>
 </body>
 </html>

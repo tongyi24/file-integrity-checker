@@ -9,6 +9,8 @@
 
 A portable, browser-based file integrity verification tool. Zero dependencies, zero installation, zero network requests. Just open one HTML file and verify your files.
 
+![Screenshot](docs/screenshot.png)
+
 ## Why This Exists
 
 Transferring large files between machines (Mac → Windows, NAS → laptop, cloud → local) often results in corrupted or incomplete files — especially with 4K video, raw photos, or database backups. This tool lets you verify every single byte arrived intact, without installing anything or trusting a third-party server.
