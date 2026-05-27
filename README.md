@@ -1,56 +1,120 @@
 # File Integrity Checker
 
-**[Online Demo](https://tongyi24.github.io/file-integrity-checker/)** — use it directly in your browser, no download needed.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![GitHub Pages](https://img.shields.io/badge/demo-live-brightgreen)](https://tongyi24.github.io/file-integrity-checker/)
+[![No Dependencies](https://img.shields.io/badge/dependencies-zero-orange)]()
+[![Single File](https://img.shields.io/badge/size-single%20HTML-purple)]()
 
-A portable, browser-based file integrity verification tool. No installation, no server — just open `index.html` in any modern browser.
+**[Try it now](https://tongyi24.github.io/file-integrity-checker/)** — runs entirely in your browser, no download needed.
+
+A portable, browser-based file integrity verification tool. Zero dependencies, zero installation, zero network requests. Just open one HTML file and verify your files.
+
+## Why This Exists
+
+Transferring large files between machines (Mac → Windows, NAS → laptop, cloud → local) often results in corrupted or incomplete files — especially with 4K video, raw photos, or database backups. This tool lets you verify every single byte arrived intact, without installing anything or trusting a third-party server.
 
 ## Features
 
-- **Compare Folders** — Compare two folders side-by-side with SHA-256 hashing. Detects identical, modified, missing, extra, and relocated files.
-- **Compare Files** — Compare two individual files byte-by-byte via SHA-256.
-- **Generate Checksums** — Generate a `sha256sum`-compatible checksum file for any folder.
-- **Verify Checksums** — Verify files against a previously generated checksum file.
-- **Flexible Matching** — Cross-machine verification that ignores directory structure differences (matches by filename or content hash).
-- **Smart Caching** — Uses `localStorage` to cache hashes; unchanged files are verified instantly on subsequent runs.
-- **Streaming Hash** — Pure JavaScript SHA-256 implementation processes large files (4K video, etc.) in chunks without loading everything into memory.
+| Feature | Description |
+|---------|-------------|
+| **Compare Folders** | Side-by-side folder comparison with SHA-256. Detects identical, modified, missing, extra, and relocated files |
+| **Compare Files** | Compare two individual files byte-by-byte |
+| **Generate Checksums** | Create `sha256sum`-compatible checksum files for any folder |
+| **Verify Checksums** | Verify files against a previously generated checksum file |
+| **Flexible Matching** | Cross-machine verification that ignores directory structure differences — matches by filename or content hash |
+| **Smart Caching** | Caches hashes in `localStorage`; unchanged files verify instantly on subsequent runs |
+| **Streaming Hash** | Pure JavaScript SHA-256 processes files in 4MB chunks — handles multi-GB files without memory issues |
 
-## Usage
+## Quick Start
 
-1. Visit the **[online version](https://tongyi24.github.io/file-integrity-checker/)**, or open `index.html` locally in Chrome, Edge, Firefox, or Safari.
-2. Select the appropriate tab for your task.
-3. Use the "Browse" buttons to select files/folders.
-4. Click "Start" and wait for results.
-5. Optionally save the report for record keeping.
+### Option 1: Use Online (Recommended)
+
+Visit **https://tongyi24.github.io/file-integrity-checker/** — that's it.
+
+### Option 2: Use Locally
+
+1. Download `index.html` (just one file, ~25KB)
+2. Open it in any modern browser
+3. Done — works completely offline
+
+## Use Cases
+
+- **Video / Photo Transfer** — Verify 4K footage transferred via LocalSend, AirDrop, SMB, or USB drive
+- **Backup Verification** — Confirm NAS/cloud backups match originals
+- **Cross-Platform Sync** — Validate files after Mac ↔ Windows ↔ Linux transfers
+- **Data Migration** — Ensure database dumps, archives, or disk images transferred correctly
 
 ## Cross-Machine Workflow
 
 When verifying files transferred between machines (e.g., Mac → Windows):
 
-1. On the **source machine**: use the "Generate Checksums" tab to create a checksum file and save it.
-2. Transfer the checksum file alongside your data.
-3. On the **target machine**: use the "Verify Checksums" tab, load the checksum file, select the target folder, enable **Flexible matching** if directory structures differ, then start verification.
+1. **Source machine**: Use the "Generate Checksums" tab → select your folder → save the `.txt` checksum file
+2. **Transfer**: Copy the checksum file alongside your data (it's tiny, just text)
+3. **Target machine**: Use the "Verify Checksums" tab → load the checksum file → select the target folder
+4. **If directories differ**: Enable **Flexible matching** to match by filename or content hash instead of exact paths
+
+## How It Works
+
+```
+                    ┌─────────────┐
+  Select files ───▶ │  Browser    │ ──▶ Results
+  (never leave      │  (local JS) │     (pass/fail)
+   your machine)    └─────────────┘
+                         │
+                    Pure SHA-256
+                    (4MB chunks)
+```
+
+- Files are read locally via the browser's File API
+- SHA-256 hashing runs in pure JavaScript (no WebAssembly, no Web Crypto API dependency)
+- Results stay in your browser tab — nothing is sent anywhere
+- Cache uses `localStorage`, scoped to the page origin
 
 ## Privacy & Security
 
 - **100% client-side** — All file processing happens in your browser. Nothing is uploaded to any server.
-- **Zero network requests** — The tool makes no HTTP calls, API calls, or telemetry of any kind.
-- **No tracking** — No cookies, analytics, or third-party scripts.
-- **Cache isolation** — Hash cache is stored in `localStorage`, scoped to the domain, and contains only hash strings (no file content).
+- **Zero network requests** — No `fetch`, no `XMLHttpRequest`, no tracking pixels, no analytics.
+- **No third-party code** — No CDN imports, no external scripts, no fonts loaded from Google.
+- **Cache isolation** — Hash cache in `localStorage` contains only hash strings, never file content.
+- **Open source** — Every line of code is auditable in a single file.
 
 ## Technical Details
 
-- **Zero dependencies** — Single HTML file with embedded CSS and JavaScript.
-- **No server** — Everything runs locally in the browser. Files are never uploaded anywhere.
-- **SHA-256** — Streaming implementation handles files of any size.
-- **Cache** — Stored in browser `localStorage` keyed by folder name, relative path, file size, and last modification time.
+- **Single HTML file** — CSS + JavaScript embedded, zero build step
+- **~25KB total** — Smaller than most favicons
+- **SHA-256** — Hand-written streaming implementation (message schedule, compression, proper padding)
+- **4MB chunked reading** — Processes multi-GB files without memory pressure
+- **Three-tier flexible matching** — Path → Filename → Content hash (progressive fallback)
+- **localStorage cache** — Keyed by `folderName/relativePath|fileSize|lastModified`
 
 ## Compatibility
 
 Works on any OS with a modern browser:
-- macOS (Chrome, Safari, Edge, Firefox)
-- Windows (Chrome, Edge, Firefox)
-- Linux (Chrome, Firefox)
+
+| OS | Browsers |
+|----|----------|
+| macOS | Chrome, Safari, Edge, Firefox |
+| Windows | Chrome, Edge, Firefox |
+| Linux | Chrome, Firefox |
+
+> Note: Safari has limited support for `webkitdirectory` in some versions. Chrome/Edge recommended for best experience.
+
+## Comparison with Alternatives
+
+| | This Tool | `shasum` CLI | HashMyFiles | Online Hash Tools |
+|--|-----------|-------------|-------------|-------------------|
+| Cross-platform | All | Per-OS commands | Windows only | Depends on service |
+| Installation | None | System tool | Download + install | None |
+| Privacy | 100% local | Local | Local | Files uploaded to server |
+| Folder comparison | Built-in | Manual scripting | No | No |
+| Flexible matching | Yes | No | No | No |
+| Caching | Yes | No | No | No |
+| GUI | Yes | No | Yes | Yes |
+
+## Contributing
+
+Contributions welcome! Since this is a single-file project, please keep all changes within `index.html`.
 
 ## License
 
-MIT
+[MIT](LICENSE)
