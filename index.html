@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>File Integrity Checker</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f5f5f7;color:#1d1d1f;min-height:100vh}
+.header{background:linear-gradient(135deg,#1a1a2e,#16213e);color:#fff;padding:18px 28px;display:flex;align-items:center;gap:14px}
+.header h1{font-size:20px;font-weight:600}.badge{background:rgba(255,255,255,.15);padding:3px 10px;border-radius:10px;font-size:11px}
+.tabs{display:flex;background:#fff;border-bottom:1px solid #e0e0e0;padding:0 20px}
+.tab{padding:13px 22px;cursor:pointer;border-bottom:3px solid transparent;font-size:14px;font-weight:500;color:#666;transition:.2s}
+.tab:hover{color:#333}.tab.active{color:#0071e3;border-bottom-color:#0071e3}
+.content{max-width:1200px;margin:0 auto;padding:20px}
+.panel{display:none}.panel.active{display:block}
+.card{background:#fff;border-radius:12px;padding:20px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.card h3{font-size:15px;font-weight:600;margin-bottom:14px;color:#333}
+.field{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.field label{width:110px;font-size:13px;font-weight:500;color:#555;flex-shrink:0}
+.field .path-display{flex:1;min-width:200px;padding:9px 12px;background:#f8f8fa;border:1px solid #d0d0d0;border-radius:8px;font-size:13px;color:#333;min-height:38px;word-break:break-all}
+.field .path-display.empty{color:#999;font-style:italic}
+.btn{padding:9px 18px;border:none;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;transition:.15s;white-space:nowrap}
+.btn:hover{transform:translateY(-1px)}.btn:active{transform:translateY(0)}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.btn-primary{background:#0071e3;color:#fff}.btn-browse{background:#6c5ce7;color:#fff}
+.btn-danger{background:#ff3b30;color:#fff}.btn-success{background:#34c759;color:#fff}
+.btn-secondary{background:#e8e8ed;color:#333}
+.btn-row{display:flex;gap:8px;margin-top:6px;flex-wrap:wrap}
+.progress-bar{height:6px;background:#e8e8ed;border-radius:3px;overflow:hidden;margin-top:10px}
+.progress-fill{height:100%;background:linear-gradient(90deg,#0071e3,#34c759);transition:width .2s;width:0}
+.status-text{font-size:12px;color:#888;margin-top:5px;min-height:16px;word-break:break-all}
+.results-wrap{max-height:420px;overflow-y:auto;border:1px solid #e0e0e0;border-radius:8px;margin-top:8px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:9px 10px;background:#f5f5f7;font-weight:600;border-bottom:2px solid #e0e0e0;position:sticky;top:0}
+td{padding:7px 10px;border-bottom:1px solid #f0f0f0}
+tr:hover{background:#f8f8fa}
+.tag{display:inline-block;padding:2px 9px;border-radius:10px;font-size:11px;font-weight:600}
+.tag-ok{background:#d4edda;color:#155724}.tag-cached{background:#d1ecf1;color:#0c5460}
+.tag-fail{background:#f8d7da;color:#721c24}.tag-missing{background:#fff3cd;color:#856404}
+.tag-extra{background:#e8d5f5;color:#5a2d82}.tag-relocated{background:#d4e6f1;color:#1a5276}
+.tag-done{background:#d4edda;color:#155724}.tag-warning{background:#fad7a0;color:#7d6608}
+.tag-missing_b{background:#fff3cd;color:#856404}
+.summary{padding:14px;border-radius:8px;font-weight:600;font-size:14px;margin-top:10px;text-align:center}
+.summary.green{background:#d4edda;color:#155724}.summary.red{background:#f8d7da;color:#721c24}.summary.orange{background:#fff3cd;color:#856404}
+.hint{font-size:12px;color:#999;margin-top:4px}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>File Integrity Checker</h1>
+  <span class="badge">SHA-256</span>
+  <span class="badge">Offline</span>
+</div>
+<div class="tabs" id="tabbar"></div>
+<div class="content" id="panels"></div>
+<input type="file" id="fi-cmp-a" webkitdirectory style="display:none">
+<input type="file" id="fi-cmp-b" webkitdirectory style="display:none">
+<input type="file" id="fi-gen" webkitdirectory style="display:none">
+<input type="file" id="fi-ver-dir" webkitdirectory style="display:none">
+<input type="file" id="fi-ver-cs" accept=".txt" style="display:none">
+<input type="file" id="fi-file-a" style="display:none">
+<input type="file" id="fi-file-b" style="display:none">
+
+<script>
+// ==================== SHA-256 ====================
+const SHA256K = new Uint32Array([
+  0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+  0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+  0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+  0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+  0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+  0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+  0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+  0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
+]);
+
+class SHA256 {
+  constructor() {
+    this.H = new Uint32Array([0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19]);
+    this.buf = new Uint8Array(64);
+    this.pos = 0;
+    this.total = 0;
+  }
+  _compress(b) {
+    const W = new Uint32Array(64);
+    for (let i=0;i<16;i++) W[i]=(b[i*4]<<24)|(b[i*4+1]<<16)|(b[i*4+2]<<8)|b[i*4+3];
+    for (let i=16;i<64;i++) {
+      const s0=((W[i-15]>>>7)|(W[i-15]<<25))^((W[i-15]>>>18)|(W[i-15]<<14))^(W[i-15]>>>3);
+      const s1=((W[i-2]>>>17)|(W[i-2]<<15))^((W[i-2]>>>19)|(W[i-2]<<13))^(W[i-2]>>>10);
+      W[i]=(W[i-16]+s0+W[i-7]+s1)|0;
+    }
+    let [a,b2,c,d,e,f,g,h]=this.H;
+    for (let i=0;i<64;i++) {
+      const S1=((e>>>6)|(e<<26))^((e>>>11)|(e<<21))^((e>>>25)|(e<<7));
+      const ch=(e&f)^(~e&g);
+      const t1=(h+S1+ch+SHA256K[i]+W[i])|0;
+      const S0=((a>>>2)|(a<<30))^((a>>>13)|(a<<19))^((a>>>22)|(a<<10));
+      const maj=(a&b2)^(a&c)^(b2&c);
+      const t2=(S0+maj)|0;
+      h=g;g=f;f=e;e=(d+t1)|0;d=c;c=b2;b2=a;a=(t1+t2)|0;
+    }
+    this.H[0]=(this.H[0]+a)|0;this.H[1]=(this.H[1]+b2)|0;this.H[2]=(this.H[2]+c)|0;this.H[3]=(this.H[3]+d)|0;
+    this.H[4]=(this.H[4]+e)|0;this.H[5]=(this.H[5]+f)|0;this.H[6]=(this.H[6]+g)|0;this.H[7]=(this.H[7]+h)|0;
+  }
+  update(data) {
+    const u8 = data instanceof Uint8Array ? data : new Uint8Array(data);
+    this.total += u8.length;
+    let i = 0;
+    if (this.pos > 0) {
+      while (i < u8.length && this.pos < 64) this.buf[this.pos++] = u8[i++];
+      if (this.pos === 64) { this._compress(this.buf); this.pos = 0; }
+    }
+    while (i + 64 <= u8.length) { this._compress(u8.subarray(i, i + 64)); i += 64; }
+    while (i < u8.length) this.buf[this.pos++] = u8[i++];
+  }
+  hex() {
+    const total = this.total;
+    this.buf[this.pos++] = 0x80;
+    if (this.pos > 56) { while (this.pos < 64) this.buf[this.pos++] = 0; this._compress(this.buf); this.pos = 0; }
+    while (this.pos < 56) this.buf[this.pos++] = 0;
+    const bits = total * 8;
+    const hi = Math.floor(bits / 4294967296);
+    const lo = bits % 4294967296;
+    this.buf[56]=(hi>>>24)&0xff;this.buf[57]=(hi>>>16)&0xff;this.buf[58]=(hi>>>8)&0xff;this.buf[59]=hi&0xff;
+    this.buf[60]=(lo>>>24)&0xff;this.buf[61]=(lo>>>16)&0xff;this.buf[62]=(lo>>>8)&0xff;this.buf[63]=lo&0xff;
+    this._compress(this.buf);
+    return Array.from(this.H).map(w=>(w>>>0).toString(16).padStart(8,'0')).join('').toUpperCase();
+  }
+}
+
+// ==================== File Utilities ====================
+const CHUNK = 4 * 1024 * 1024;
+
+async function hashFile(file, onProgress) {
+  const sha = new SHA256();
+  const size = file.size;
+  let offset = 0;
+  while (offset < size) {
+    const end = Math.min(offset + CHUNK, size);
+    const buf = await file.slice(offset, end).arrayBuffer();
+    sha.update(new Uint8Array(buf));
+    offset = end;
+    if (onProgress) onProgress(offset / size);
+    await new Promise(r => setTimeout(r, 0));
+  }
+  return sha.hex();
+}
+
+function collectFolder(input) {
+  const files = Array.from(input.files).filter(f => !f.name.startsWith('.'));
+  if (!files.length) return { name: '', files: [] };
+  const base = files[0].webkitRelativePath.split('/')[0];
+  return {
+    name: base,
+    files: files.map(f => ({
+      rel: f.webkitRelativePath.substring(base.length + 1),
+      file: f
+    })).sort((a, b) => a.rel.localeCompare(b.rel))
+  };
+}
+
+// ==================== Cache (localStorage) ====================
+const CACHE_KEY = 'fic_cache';
+function loadCache() { try { return JSON.parse(localStorage.getItem(CACHE_KEY) || '{}'); } catch { return {}; } }
+function saveCache(c) { try { localStorage.setItem(CACHE_KEY, JSON.stringify(c)); } catch {} }
+function cacheKey(name, rel, size, mtime) { return `${name}/${rel}|${size}|${mtime}`; }
+
+// ==================== State ====================
+let running = false;
+let results = [];
+
+function stopAll() { running = false; }
+
+// ==================== UI Helpers ====================
+function $(id) { return document.getElementById(id); }
+function statusTag(s) { return `<span class="tag tag-${s.toLowerCase()}">${s}</span>`; }
+
+function addRow(tbody, cols) {
+  const tr = document.createElement('tr');
+  tr.innerHTML = cols.map((c, i) => `<td>${i === 1 ? statusTag(c) : c}</td>`).join('');
+  tbody.appendChild(tr);
+  const wrap = tbody.closest('.results-wrap');
+  if (wrap) wrap.scrollTop = wrap.scrollHeight;
+}
+
+function downloadText(text, filename) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+  a.download = filename;
+  a.click();
+}
+
+// ==================== Tab System ====================
+const TABS = [
+  { id: 'compare', label: 'Compare Folders' },
+  { id: 'files', label: 'Compare Files' },
+  { id: 'generate', label: 'Generate Checksums' },
+  { id: 'verify', label: 'Verify Checksums' }
+];
+let activeTab = 'compare';
+
+function switchTab(id) {
+  activeTab = id;
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.id === id));
+  document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'p-' + id));
+}
+
+function buildTabs() {
+  const bar = $('tabbar');
+  TABS.forEach(t => {
+    const d = document.createElement('div');
+    d.className = 'tab' + (t.id === activeTab ? ' active' : '');
+    d.textContent = t.label;
+    d.dataset.id = t.id;
+    d.onclick = () => switchTab(t.id);
+    bar.appendChild(d);
+  });
+}
+
+function buildPanels() {
+  $('panels').innerHTML = `
+  <div class="panel active" id="p-compare">
+    <div class="card">
+      <h3>Compare Two Folders</h3>
+      <div class="field"><label>Folder A:</label><div class="path-display empty" id="cmp-a-path">No folder selected</div><button class="btn btn-browse" onclick="$('fi-cmp-a').click()">Browse</button></div>
+      <div class="field"><label>Folder B:</label><div class="path-display empty" id="cmp-b-path">No folder selected</div><button class="btn btn-browse" onclick="$('fi-cmp-b').click()">Browse</button></div>
+      <p class="hint">Select two folders to compare. Files are matched by relative path and verified by SHA-256 hash.</p>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="cmp-start" onclick="startCompare()">Start Compare</button>
+        <button class="btn btn-danger" id="cmp-stop" onclick="stopAll()" disabled>Stop</button>
+        <button class="btn btn-secondary" onclick="clearCache()">Clear Cache</button>
+        <button class="btn btn-secondary" onclick="saveReport('cmp')">Save Report</button>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="cmp-prog"></div></div>
+      <div class="status-text" id="cmp-status">Ready.</div>
+    </div>
+    <div class="card"><h3>Results</h3><div class="results-wrap"><table><thead><tr><th>File</th><th>Status</th><th>Details</th></tr></thead><tbody id="cmp-tbody"></tbody></table></div>
+    <div class="summary" id="cmp-summary" style="display:none"></div></div>
+  </div>
+
+  <div class="panel" id="p-files">
+    <div class="card">
+      <h3>Compare Two Files</h3>
+      <div class="field"><label>File A:</label><div class="path-display empty" id="fca-path">No file selected</div><button class="btn btn-browse" onclick="$('fi-file-a').click()">Browse</button></div>
+      <div class="field"><label>File B:</label><div class="path-display empty" id="fcb-path">No file selected</div><button class="btn btn-browse" onclick="$('fi-file-b').click()">Browse</button></div>
+      <p class="hint">Select two individual files to compare their SHA-256 hashes.</p>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="fc-start" onclick="startFileCompare()">Compare</button>
+        <button class="btn btn-danger" id="fc-stop" onclick="stopAll()" disabled>Stop</button>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="fc-prog"></div></div>
+      <div class="status-text" id="fc-status">Ready.</div>
+    </div>
+    <div class="card">
+      <h3>Results</h3>
+      <div id="fc-result" style="padding:10px;font-size:14px;color:#666">No comparison run yet.</div>
+      <div class="summary" id="fc-summary" style="display:none"></div>
+    </div>
+  </div>
+
+  <div class="panel" id="p-generate">
+    <div class="card">
+      <h3>Generate Checksum File</h3>
+      <div class="field"><label>Source Folder:</label><div class="path-display empty" id="gen-path">No folder selected</div><button class="btn btn-browse" onclick="$('fi-gen').click()">Browse</button></div>
+      <p class="hint">Generates a SHA-256 checksum file for all files in the folder. Download the file to use on another machine.</p>
+      <div class="btn-row">
+        <button class="btn btn-success" id="gen-start" onclick="startGenerate()">Generate</button>
+        <button class="btn btn-danger" id="gen-stop" onclick="stopAll()" disabled>Stop</button>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="gen-prog"></div></div>
+      <div class="status-text" id="gen-status">Ready.</div>
+    </div>
+    <div class="card"><h3>Generated Checksums</h3><div class="results-wrap"><table><thead><tr><th>File</th><th style="font-family:monospace">SHA-256</th></tr></thead><tbody id="gen-tbody"></tbody></table></div>
+    <div class="summary" id="gen-summary" style="display:none"></div></div>
+  </div>
+
+  <div class="panel" id="p-verify">
+    <div class="card">
+      <h3>Verify Files Against Checksum</h3>
+      <div class="field"><label>Checksum File:</label><div class="path-display empty" id="ver-cs-path">No file selected</div><button class="btn btn-browse" onclick="$('fi-ver-cs').click()">Browse</button></div>
+      <div class="field"><label>Target Folder:</label><div class="path-display empty" id="ver-dir-path">No folder selected</div><button class="btn btn-browse" onclick="$('fi-ver-dir').click()">Browse</button></div>
+      <div class="field" style="margin-top:6px">
+        <label></label>
+        <label style="width:auto;display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" id="ver-flexible"> <span style="font-size:13px">Flexible matching (ignore folder structure, match by filename or content)</span>
+        </label>
+      </div>
+      <p class="hint">Enable flexible matching when files may be in different subdirectories on the target machine.</p>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="ver-start" onclick="startVerify()">Start Verify</button>
+        <button class="btn btn-danger" id="ver-stop" onclick="stopAll()" disabled>Stop</button>
+        <button class="btn btn-secondary" onclick="clearCache()">Clear Cache</button>
+        <button class="btn btn-secondary" onclick="saveReport('ver')">Save Report</button>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="ver-prog"></div></div>
+      <div class="status-text" id="ver-status">Ready.</div>
+    </div>
+    <div class="card"><h3>Results</h3><div class="results-wrap"><table><thead><tr><th>File</th><th>Status</th><th>Details</th></tr></thead><tbody id="ver-tbody"></tbody></table></div>
+    <div class="summary" id="ver-summary" style="display:none"></div></div>
+  </div>`;
+}
+
+// ==================== Folder Data ====================
+let cmpA = null, cmpB = null, genData = null, verDir = null, verCsText = '';
+
+$('fi-cmp-a').addEventListener('change', function() {
+  cmpA = collectFolder(this);
+  const el = $('cmp-a-path');
+  el.textContent = cmpA.name + ' (' + cmpA.files.length + ' files)';
+  el.classList.remove('empty');
+});
+$('fi-cmp-b').addEventListener('change', function() {
+  cmpB = collectFolder(this);
+  const el = $('cmp-b-path');
+  el.textContent = cmpB.name + ' (' + cmpB.files.length + ' files)';
+  el.classList.remove('empty');
+});
+$('fi-gen').addEventListener('change', function() {
+  genData = collectFolder(this);
+  const el = $('gen-path');
+  el.textContent = genData.name + ' (' + genData.files.length + ' files)';
+  el.classList.remove('empty');
+});
+$('fi-ver-dir').addEventListener('change', function() {
+  verDir = collectFolder(this);
+  const el = $('ver-dir-path');
+  el.textContent = verDir.name + ' (' + verDir.files.length + ' files)';
+  el.classList.remove('empty');
+});
+$('fi-ver-cs').addEventListener('change', async function() {
+  if (this.files.length) {
+    verCsText = await this.files[0].text();
+    const el = $('ver-cs-path');
+    el.textContent = this.files[0].name;
+    el.classList.remove('empty');
+  }
+});
+
+// ==================== File Compare Data ====================
+let fcFileA = null, fcFileB = null;
+$('fi-file-a').addEventListener('change', function() {
+  if (this.files.length) {
+    fcFileA = this.files[0];
+    const el = $('fca-path');
+    el.textContent = fcFileA.name + ' (' + (fcFileA.size / 1024 / 1024).toFixed(1) + ' MB)';
+    el.classList.remove('empty');
+  }
+});
+$('fi-file-b').addEventListener('change', function() {
+  if (this.files.length) {
+    fcFileB = this.files[0];
+    const el = $('fcb-path');
+    el.textContent = fcFileB.name + ' (' + (fcFileB.size / 1024 / 1024).toFixed(1) + ' MB)';
+    el.classList.remove('empty');
+  }
+});
+
+async function startFileCompare() {
+  if (!fcFileA || !fcFileB) { alert('Please select both files.'); return; }
+  running = true;
+  $('fc-start').disabled = true; $('fc-stop').disabled = false;
+  const resEl = $('fc-result');
+  const smEl = $('fc-summary'); smEl.style.display = 'none';
+  resEl.innerHTML = '<p style="color:#888">Computing hash for File A...</p>';
+
+  $('fc-status').textContent = 'Hashing File A...';
+  $('fc-prog').style.width = '0%';
+  const hA = await hashFile(fcFileA, p => { $('fc-prog').style.width = (p * 50) + '%'; });
+  if (!running) { resEl.innerHTML = '<p>Stopped.</p>'; $('fc-start').disabled=false; $('fc-stop').disabled=true; return; }
+
+  resEl.innerHTML += '<p style="color:#888">Computing hash for File B...</p>';
+  $('fc-status').textContent = 'Hashing File B...';
+  const hB = await hashFile(fcFileB, p => { $('fc-prog').style.width = (50 + p * 50) + '%'; });
+  if (!running) { resEl.innerHTML = '<p>Stopped.</p>'; $('fc-start').disabled=false; $('fc-stop').disabled=true; return; }
+
+  $('fc-prog').style.width = '100%';
+  $('fc-status').textContent = 'Done.';
+
+  const match = hA === hB;
+  resEl.innerHTML = `
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <tr><td style="padding:8px;font-weight:600;width:80px">File A:</td><td style="padding:8px">${fcFileA.name} (${(fcFileA.size/1024/1024).toFixed(2)} MB)</td></tr>
+      <tr><td style="padding:8px;font-weight:600">SHA-256:</td><td style="padding:8px;font-family:monospace;font-size:11px;word-break:break-all">${hA}</td></tr>
+      <tr><td colspan="2" style="padding:4px"></td></tr>
+      <tr><td style="padding:8px;font-weight:600">File B:</td><td style="padding:8px">${fcFileB.name} (${(fcFileB.size/1024/1024).toFixed(2)} MB)</td></tr>
+      <tr><td style="padding:8px;font-weight:600">SHA-256:</td><td style="padding:8px;font-family:monospace;font-size:11px;word-break:break-all">${hB}</td></tr>
+    </table>`;
+
+  smEl.textContent = match ? 'MATCH - Files are identical!' : 'DIFFERENT - Files do NOT match!';
+  smEl.className = 'summary ' + (match ? 'green' : 'red');
+  smEl.style.display = 'block';
+  running = false; $('fc-start').disabled = false; $('fc-stop').disabled = true;
+}
+
+// ==================== Compare ====================
+async function startCompare() {
+  if (!cmpA || !cmpB || !cmpA.files.length || !cmpB.files.length) { alert('Please select both folders.'); return; }
+  running = true;
+  $('cmp-start').disabled = true; $('cmp-stop').disabled = false;
+  $('cmp-tbody').innerHTML = '';
+  const smEl = $('cmp-summary'); smEl.style.display = 'none';
+  results = [];
+
+  const cache = loadCache();
+  const bMap = {};
+  for (const f of cmpB.files) bMap[f.rel] = f;
+
+  const total = cmpA.files.length + Object.keys(bMap).length;
+  let step = 0, passed = 0, failed = 0, relocated = 0, cachedN = 0;
+  const unmatchedA = [];
+  const matchedB = new Set();
+
+  for (const fa of cmpA.files) {
+    if (!running) break;
+    step++;
+    $('cmp-prog').style.width = (step / total * 100) + '%';
+    $('cmp-status').textContent = `[${Math.round(step/total*100)}%] (${step}/${total}) A: ${fa.rel}`;
+
+    const ckA = cacheKey(cmpA.name, fa.rel, fa.file.size, fa.file.lastModified);
+    let hA = cache[ckA];
+    const aCached = !!hA;
+    if (!hA) { hA = await hashFile(fa.file); cache[ckA] = hA; }
+
+    const fb = bMap[fa.rel];
+    if (!fb) {
+      unmatchedA.push({ rel: fa.rel, hash: hA });
+      continue;
+    }
+    matchedB.add(fa.rel);
+
+    const ckB = cacheKey(cmpB.name, fb.rel, fb.file.size, fb.file.lastModified);
+    let hB = cache[ckB];
+    const bCached = !!hB;
+    if (!hB) { hB = await hashFile(fb.file); cache[ckB] = hB; }
+
+    if (hA === hB) {
+      const tag = (aCached && bCached) ? 'CACHED' : 'OK';
+      addRow($('cmp-tbody'), [fa.rel, tag, '']);
+      results.push({ file: fa.rel, status: tag, detail: '' });
+      passed++;
+      if (tag === 'CACHED') cachedN++;
+    } else {
+      addRow($('cmp-tbody'), [fa.rel, 'FAIL', 'Hash mismatch']);
+      results.push({ file: fa.rel, status: 'FAIL', detail: 'Hash mismatch' });
+      failed++;
+    }
+  }
+
+  const unmatchedBList = [];
+  for (const fb of cmpB.files) {
+    if (!running) break;
+    if (matchedB.has(fb.rel)) continue;
+    step++;
+    $('cmp-prog').style.width = (step / total * 100) + '%';
+    $('cmp-status').textContent = `[${Math.round(step/total*100)}%] (${step}/${total}) B: ${fb.rel}`;
+    const ckB = cacheKey(cmpB.name, fb.rel, fb.file.size, fb.file.lastModified);
+    let hB = cache[ckB];
+    if (!hB) { hB = await hashFile(fb.file); cache[ckB] = hB; }
+    unmatchedBList.push({ rel: fb.rel, hash: hB });
+  }
+
+  if (unmatchedA.length && unmatchedBList.length) {
+    const bByHash = {};
+    for (const b of unmatchedBList) { if (!bByHash[b.hash]) bByHash[b.hash] = []; bByHash[b.hash].push(b.rel); }
+    const stillMissing = [];
+    for (const a of unmatchedA) {
+      const cands = bByHash[a.hash];
+      if (cands && cands.length) {
+        const matchRel = cands.shift();
+        addRow($('cmp-tbody'), [a.rel, 'RELOCATED', `Same content: A:${a.rel} = B:${matchRel}`]);
+        results.push({ file: a.rel, status: 'RELOCATED', detail: `A:${a.rel} = B:${matchRel}` });
+        relocated++;
+        unmatchedBList.splice(unmatchedBList.findIndex(x => x.rel === matchRel), 1);
+      } else stillMissing.push(a.rel);
+    }
+    for (const r of stillMissing) { addRow($('cmp-tbody'), [r, 'MISSING_B', 'Only in A']); results.push({file:r,status:'MISSING_B',detail:'Only in A'}); }
+    for (const b of unmatchedBList) { addRow($('cmp-tbody'), [b.rel, 'EXTRA', 'Only in B']); results.push({file:b.rel,status:'EXTRA',detail:'Only in B'}); }
+  } else {
+    for (const a of unmatchedA) { addRow($('cmp-tbody'), [a.rel, 'MISSING_B', 'Only in A']); results.push({file:a.rel,status:'MISSING_B',detail:'Only in A'}); }
+    for (const b of unmatchedBList) { addRow($('cmp-tbody'), [b.rel, 'EXTRA', 'Only in B']); results.push({file:b.rel,status:'EXTRA',detail:'Only in B'}); }
+  }
+
+  saveCache(cache);
+  const missing = results.filter(r=>r.status==='MISSING_B').length;
+  const extra = results.filter(r=>r.status==='EXTRA').length;
+
+  let summaryText, summaryColor;
+  if (!running) { summaryText = 'Stopped.'; summaryColor = 'orange'; }
+  else if (failed === 0 && missing === 0 && extra === 0) {
+    const parts = [`ALL MATCH! Passed: ${passed}`];
+    if (relocated) parts.push(`Relocated: ${relocated}`);
+    if (cachedN) parts.push(`Cached: ${cachedN}`);
+    summaryText = parts.join(' | '); summaryColor = 'green';
+  } else {
+    const parts = [`Passed: ${passed}`];
+    if (relocated) parts.push(`Relocated: ${relocated}`);
+    if (failed) parts.push(`Failed: ${failed}`);
+    if (missing) parts.push(`Missing: ${missing}`);
+    if (extra) parts.push(`Extra: ${extra}`);
+    summaryText = parts.join(' | '); summaryColor = failed ? 'red' : 'orange';
+  }
+  smEl.textContent = summaryText; smEl.className = 'summary ' + summaryColor; smEl.style.display = 'block';
+  $('cmp-status').textContent = 'Done.'; $('cmp-prog').style.width = '100%';
+  running = false; $('cmp-start').disabled = false; $('cmp-stop').disabled = true;
+}
+
+// ==================== Generate ====================
+async function startGenerate() {
+  if (!genData || !genData.files.length) { alert('Please select a folder.'); return; }
+  running = true;
+  $('gen-start').disabled = true; $('gen-stop').disabled = false;
+  $('gen-tbody').innerHTML = '';
+  const smEl = $('gen-summary'); smEl.style.display = 'none';
+  results = [];
+
+  const total = genData.files.length;
+  const lines = [];
+
+  for (let i = 0; i < total; i++) {
+    if (!running) break;
+    const f = genData.files[i];
+    const pct = Math.round((i+1)/total*100);
+    $('gen-prog').style.width = pct + '%';
+    $('gen-status').textContent = `[${pct}%] (${i+1}/${total}) ${f.rel}`;
+
+    const h = await hashFile(f.file);
+    const unixRel = f.rel.replace(/\\/g, '/');
+    lines.push(`${h.toLowerCase()}  ./${unixRel}`);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${f.rel}</td><td style="font-family:monospace;font-size:11px">${h}</td>`;
+    $('gen-tbody').appendChild(tr);
+    results.push({ file: f.rel, status: 'DONE', detail: h });
+  }
+
+  if (running) {
+    downloadText(lines.join('\n') + '\n', genData.name + '_checksums.txt');
+    smEl.textContent = `Generated ${lines.length} checksums. File downloaded.`;
+    smEl.className = 'summary green'; smEl.style.display = 'block';
+  } else {
+    smEl.textContent = 'Stopped.'; smEl.className = 'summary orange'; smEl.style.display = 'block';
+  }
+  $('gen-status').textContent = 'Done.'; $('gen-prog').style.width = '100%';
+  running = false; $('gen-start').disabled = false; $('gen-stop').disabled = true;
+}
+
+// ==================== Verify ====================
+async function startVerify() {
+  if (!verCsText || !verDir || !verDir.files.length) { alert('Please select both checksum file and target folder.'); return; }
+  running = true;
+  $('ver-start').disabled = true; $('ver-stop').disabled = false;
+  $('ver-tbody').innerHTML = '';
+  const smEl = $('ver-summary'); smEl.style.display = 'none';
+  results = [];
+
+  const flexible = $('ver-flexible').checked;
+  const cache = loadCache();
+  const entries = [];
+  for (const line of verCsText.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const parts = trimmed.split('  ', 1 + 1);
+    if (parts.length !== 2) continue;
+    let rel = parts[1].trim();
+    if (rel.startsWith('./')) rel = rel.substring(2);
+    entries.push({ expected: parts[0].trim().toUpperCase(), rel });
+  }
+
+  const fileMap = {};
+  const fileByName = {};
+  for (const f of verDir.files) {
+    fileMap[f.rel] = f;
+    const name = f.rel.split('/').pop();
+    if (!fileByName[name]) fileByName[name] = [];
+    fileByName[name].push(f);
+  }
+
+  const total = entries.length;
+  let passed = 0, failed = 0, missing = 0, cachedN = 0, flexMatched = 0;
+  const usedFiles = new Set();
+  const unmatchedEntries = [];
+
+  for (let i = 0; i < total; i++) {
+    if (!running) break;
+    const e = entries[i];
+    const pct = Math.round((i+1)/total*100);
+    $('ver-prog').style.width = pct + '%';
+    $('ver-status').textContent = `[${pct}%] (${i+1}/${total}) ${e.rel}`;
+
+    let fd = fileMap[e.rel] || fileMap[e.rel.replace(/\//g, '\\')];
+
+    if (!fd && flexible) {
+      const name = e.rel.split('/').pop();
+      const candidates = (fileByName[name] || []).filter(c => !usedFiles.has(c.rel));
+      if (candidates.length === 1) fd = candidates[0];
+      else if (candidates.length > 1) {
+        for (const c of candidates) {
+          const ck = cacheKey(verDir.name, c.rel, c.file.size, c.file.lastModified);
+          let h = cache[ck];
+          if (!h) { h = await hashFile(c.file); cache[ck] = h; }
+          if (h === e.expected) { fd = c; break; }
+        }
+        if (!fd) fd = candidates[0];
+      }
+    }
+
+    if (!fd) {
+      if (flexible) {
+        unmatchedEntries.push(e);
+      } else {
+        addRow($('ver-tbody'), [e.rel, 'MISSING', 'File not found']);
+        results.push({ file: e.rel, status: 'MISSING', detail: 'Not found' });
+        missing++;
+      }
+      continue;
+    }
+
+    usedFiles.add(fd.rel);
+    const ck = cacheKey(verDir.name, fd.rel, fd.file.size, fd.file.lastModified);
+    let h = cache[ck];
+    if (h && h === e.expected) {
+      const detail = (fd.rel !== e.rel) ? `Matched: ${fd.rel}` : '';
+      const tag = (fd.rel !== e.rel) ? 'OK' : 'CACHED';
+      addRow($('ver-tbody'), [e.rel, tag, detail]);
+      results.push({ file: e.rel, status: tag, detail });
+      passed++;
+      if (tag === 'CACHED') cachedN++;
+      if (fd.rel !== e.rel) flexMatched++;
+      continue;
+    }
+
+    if (!h) { h = await hashFile(fd.file); cache[ck] = h; }
+
+    if (h === e.expected) {
+      const detail = (fd.rel !== e.rel) ? `Matched: ${fd.rel}` : '';
+      addRow($('ver-tbody'), [e.rel, 'OK', detail]);
+      results.push({ file: e.rel, status: 'OK', detail });
+      passed++;
+      if (fd.rel !== e.rel) flexMatched++;
+    } else {
+      addRow($('ver-tbody'), [e.rel, 'FAIL', 'Hash mismatch']);
+      results.push({ file: e.rel, status: 'FAIL', detail: 'Hash mismatch' });
+      failed++;
+    }
+  }
+
+  if (flexible && unmatchedEntries.length) {
+    $('ver-status').textContent = 'Content-based matching for remaining files...';
+    await new Promise(r => setTimeout(r, 0));
+    const unusedFiles = verDir.files.filter(f => !usedFiles.has(f.rel));
+    const unusedHashes = {};
+    for (const uf of unusedFiles) {
+      if (!running) break;
+      const ck = cacheKey(verDir.name, uf.rel, uf.file.size, uf.file.lastModified);
+      let h = cache[ck];
+      if (!h) { h = await hashFile(uf.file); cache[ck] = h; }
+      if (!unusedHashes[h]) unusedHashes[h] = [];
+      unusedHashes[h].push(uf.rel);
+    }
+    for (const e of unmatchedEntries) {
+      const cands = unusedHashes[e.expected];
+      if (cands && cands.length) {
+        const matchRel = cands.shift();
+        addRow($('ver-tbody'), [e.rel, 'OK', `Content match: ${matchRel}`]);
+        results.push({ file: e.rel, status: 'OK', detail: `Content match: ${matchRel}` });
+        passed++;
+        flexMatched++;
+      } else {
+        addRow($('ver-tbody'), [e.rel, 'MISSING', 'File not found (even with flexible matching)']);
+        results.push({ file: e.rel, status: 'MISSING', detail: 'Not found' });
+        missing++;
+      }
+    }
+  }
+
+  saveCache(cache);
+  let summaryText, summaryColor;
+  if (!running) { summaryText = 'Stopped.'; summaryColor = 'orange'; }
+  else if (failed === 0 && missing === 0) {
+    const parts = [`ALL PASSED! Passed: ${passed}`];
+    if (cachedN) parts.push(`Cached: ${cachedN}`);
+    if (flexMatched) parts.push(`Flex-matched: ${flexMatched}`);
+    parts.push(`Total: ${total}`);
+    summaryText = parts.join(' | '); summaryColor = 'green';
+  } else {
+    const parts = [`Passed: ${passed}`];
+    if (cachedN) parts.push(`Cached: ${cachedN}`);
+    if (flexMatched) parts.push(`Flex-matched: ${flexMatched}`);
+    if (failed) parts.push(`Failed: ${failed}`);
+    if (missing) parts.push(`Missing: ${missing}`);
+    parts.push(`Total: ${total}`);
+    summaryText = parts.join(' | '); summaryColor = 'red';
+  }
+  smEl.textContent = summaryText; smEl.className = 'summary ' + summaryColor; smEl.style.display = 'block';
+  $('ver-status').textContent = 'Done.'; $('ver-prog').style.width = '100%';
+  running = false; $('ver-start').disabled = false; $('ver-stop').disabled = true;
+}
+
+// ==================== Utilities ====================
+function clearCache() { localStorage.removeItem(CACHE_KEY); alert('Cache cleared.'); }
+
+function saveReport(prefix) {
+  if (!results.length) { alert('No results.'); return; }
+  const sm = $(prefix + '-summary');
+  const lines = [
+    'Verification Report - ' + new Date().toLocaleString(),
+    '='.repeat(60),
+    sm ? sm.textContent : '',
+    '='.repeat(60), ''
+  ];
+  for (const r of results) {
+    lines.push(`[${r.status}] ${r.file}${r.detail ? '  -- ' + r.detail : ''}`);
+  }
+  downloadText(lines.join('\n'), 'verify_report_' + new Date().toISOString().slice(0,19).replace(/[T:]/g,'-') + '.txt');
+}
+
+// ==================== Init ====================
+buildTabs();
+buildPanels();
+</script>
+</body>
+</html>
