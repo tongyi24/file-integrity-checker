@@ -1,5 +1,7 @@
 # File Integrity Checker
 
+**[Online Demo](https://tongyi24.github.io/file-integrity-checker/)** — use it directly in your browser, no download needed.
+
 A portable, browser-based file integrity verification tool. No installation, no server — just open `index.html` in any modern browser.
 
 ## Features
@@ -14,7 +16,7 @@ A portable, browser-based file integrity verification tool. No installation, no 
 
 ## Usage
 
-1. Open `index.html` in Chrome, Edge, Firefox, or Safari.
+1. Visit the **[online version](https://tongyi24.github.io/file-integrity-checker/)**, or open `index.html` locally in Chrome, Edge, Firefox, or Safari.
 2. Select the appropriate tab for your task.
 3. Use the "Browse" buttons to select files/folders.
 4. Click "Start" and wait for results.
@@ -27,6 +29,13 @@ When verifying files transferred between machines (e.g., Mac → Windows):
 1. On the **source machine**: use the "Generate Checksums" tab to create a checksum file and save it.
 2. Transfer the checksum file alongside your data.
 3. On the **target machine**: use the "Verify Checksums" tab, load the checksum file, select the target folder, enable **Flexible matching** if directory structures differ, then start verification.
+
+## Privacy & Security
+
+- **100% client-side** — All file processing happens in your browser. Nothing is uploaded to any server.
+- **Zero network requests** — The tool makes no HTTP calls, API calls, or telemetry of any kind.
+- **No tracking** — No cookies, analytics, or third-party scripts.
+- **Cache isolation** — Hash cache is stored in `localStorage`, scoped to the domain, and contains only hash strings (no file content).
 
 ## Technical Details
 
