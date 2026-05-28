@@ -65,6 +65,7 @@ tr:hover{background:#f8f8fa}
 <input type="file" id="fi-ver-cs" accept=".txt" style="display:none">
 <input type="file" id="fi-file-a" style="display:none">
 <input type="file" id="fi-file-b" style="display:none">
+<input type="file" id="fi-hc-file" style="display:none">
 
 <script>
 // ==================== SHA-256 ====================
@@ -226,14 +227,25 @@ const LANG = {
     alert_select_both: 'Please select both checksum file and target folder.',
     alert_no_results: 'No results.',
     alert_cache_cleared: 'Cache cleared.',
+    tab_hash: 'Hash Check',
+    hc_title: 'Verify File Against Known Hash',
+    hc_file: 'File:',
+    hc_hash: 'Expected Hash:',
+    hc_hash_placeholder: 'Paste SHA-256 hash here (64 hex characters)',
+    hc_hint: 'Enter a known SHA-256 hash value and select a file to verify if they match.',
+    btn_verify_hash: 'Verify',
+    hc_match_yes: 'MATCH - File hash matches the expected value!',
+    hc_match_no: 'MISMATCH - File hash does NOT match!',
+    hc_no_result: 'No verification run yet.',
+    alert_hc_both: 'Please select a file and enter a hash value.',
     lang_toggle: '中文',
   },
   zh: {
     title: '文件完整性校验',
-    tab_compare: '文件夹对比',
-    tab_files: '文件对比',
+    tab_compare: '对比文件夹',
+    tab_files: '对比文件',
     tab_generate: '生成校验码',
-    tab_verify: '校验验证',
+    tab_verify: '批量验证',
     cmp_title: '对比两个文件夹',
     folder_a: '文件夹 A：',
     folder_b: '文件夹 B：',
@@ -276,6 +288,17 @@ const LANG = {
     alert_select_both: '请同时选择校验码文件和目标文件夹。',
     alert_no_results: '没有结果。',
     alert_cache_cleared: '缓存已清除。',
+    tab_hash: '哈希校验',
+    hc_title: '用已知哈希值验证文件',
+    hc_file: '文件：',
+    hc_hash: '期望哈希：',
+    hc_hash_placeholder: '粘贴 SHA-256 哈希值（64 位十六进制）',
+    hc_hint: '输入已知的 SHA-256 哈希值，选择文件验证是否匹配。',
+    btn_verify_hash: '验证',
+    hc_match_yes: '匹配 - 文件哈希与期望值一致！',
+    hc_match_no: '不匹配 - 文件哈希与期望值不同！',
+    hc_no_result: '尚未运行验证。',
+    alert_hc_both: '请选择文件并输入哈希值。',
     lang_toggle: 'EN',
   }
 };
@@ -341,6 +364,10 @@ function restoreUIState() {
     const el = $('fcb-path');
     if (el) { el.textContent = fcFileB.name + ' (' + (fcFileB.size / 1024 / 1024).toFixed(1) + ' MB)'; el.classList.remove('empty'); }
   }
+  if (hcFile) {
+    const el = $('hc-path');
+    if (el) { el.textContent = hcFile.name + ' (' + (hcFile.size / 1024 / 1024).toFixed(1) + ' MB)'; el.classList.remove('empty'); }
+  }
 }
 
 // ==================== UI Helpers ====================
@@ -367,7 +394,8 @@ const TABS = [
   { id: 'compare', labelKey: 'tab_compare' },
   { id: 'files', labelKey: 'tab_files' },
   { id: 'generate', labelKey: 'tab_generate' },
-  { id: 'verify', labelKey: 'tab_verify' }
+  { id: 'verify', labelKey: 'tab_verify' },
+  { id: 'hash', labelKey: 'tab_hash' }
 ];
 let activeTab = 'compare';
 
@@ -469,6 +497,26 @@ function buildPanels() {
     </div>
     <div class="card"><h3>${t('results')}</h3><div class="results-wrap"><table><thead><tr><th>${t('col_file')}</th><th>${t('col_status')}</th><th>${t('col_details')}</th></tr></thead><tbody id="ver-tbody"></tbody></table></div>
     <div class="summary" id="ver-summary" style="display:none"></div></div>
+  </div>
+
+  <div class="panel${activeTab === 'hash' ? ' active' : ''}" id="p-hash">
+    <div class="card">
+      <h3>${t('hc_title')}</h3>
+      <div class="field"><label>${t('hc_file')}</label><div class="path-display empty" id="hc-path">${t('drop_file')}</div><button class="btn btn-browse" onclick="$('fi-hc-file').click()">${t('btn_browse')}</button></div>
+      <div class="field"><label>${t('hc_hash')}</label><input type="text" id="hc-expected" placeholder="${t('hc_hash_placeholder')}" style="flex:1;min-width:200px;padding:9px 12px;border:1px solid #d0d0d0;border-radius:8px;font-size:13px;font-family:monospace"></div>
+      <p class="hint">${t('hc_hint')}</p>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="hc-start" onclick="startHashCheck()">${t('btn_verify_hash')}</button>
+        <button class="btn btn-danger" id="hc-stop" onclick="stopAll()" disabled>${t('btn_stop')}</button>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="hc-prog"></div></div>
+      <div class="status-text" id="hc-status">${t('ready')}</div>
+    </div>
+    <div class="card">
+      <h3>${t('results')}</h3>
+      <div id="hc-result" style="padding:10px;font-size:14px;color:#666">${t('hc_no_result')}</div>
+      <div class="summary" id="hc-summary" style="display:none"></div>
+    </div>
   </div>`;
 }
 
@@ -507,6 +555,46 @@ $('fi-ver-cs').addEventListener('change', async function() {
     el.classList.remove('empty');
   }
 });
+
+// ==================== Hash Check Data ====================
+let hcFile = null;
+$('fi-hc-file').addEventListener('change', function() {
+  if (this.files.length) {
+    hcFile = this.files[0];
+    const el = $('hc-path');
+    el.textContent = hcFile.name + ' (' + (hcFile.size / 1024 / 1024).toFixed(1) + ' MB)';
+    el.classList.remove('empty');
+  }
+});
+
+async function startHashCheck() {
+  const expectedRaw = $('hc-expected') ? $('hc-expected').value.trim() : '';
+  if (!hcFile || !expectedRaw) { alert(t('alert_hc_both')); return; }
+  const expected = expectedRaw.toUpperCase().replace(/[^0-9A-F]/g, '');
+  running = true;
+  $('hc-start').disabled = true; $('hc-stop').disabled = false;
+  const resEl = $('hc-result');
+  const smEl = $('hc-summary'); smEl.style.display = 'none';
+  resEl.innerHTML = '<p style="color:#888">Hashing...</p>';
+  $('hc-status').textContent = 'Hashing...';
+  $('hc-prog').style.width = '0%';
+  const h = await hashFile(hcFile, p => { $('hc-prog').style.width = (p * 100) + '%'; });
+  if (!running) { resEl.innerHTML = '<p>Stopped.</p>'; $('hc-start').disabled=false; $('hc-stop').disabled=true; return; }
+  $('hc-prog').style.width = '100%';
+  $('hc-status').textContent = 'Done.';
+  const match = h === expected;
+  resEl.innerHTML = `
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <tr><td style="padding:8px;font-weight:600;width:120px">${t('hc_file')}</td><td style="padding:8px">${hcFile.name} (${(hcFile.size/1024/1024).toFixed(2)} MB)</td></tr>
+      <tr><td style="padding:8px;font-weight:600">SHA-256:</td><td style="padding:8px;font-family:monospace;font-size:11px;word-break:break-all">${h}</td></tr>
+      <tr><td colspan="2" style="padding:4px"></td></tr>
+      <tr><td style="padding:8px;font-weight:600">${t('hc_hash')}</td><td style="padding:8px;font-family:monospace;font-size:11px;word-break:break-all">${expected}</td></tr>
+    </table>`;
+  smEl.textContent = match ? t('hc_match_yes') : t('hc_match_no');
+  smEl.className = 'summary ' + (match ? 'green' : 'red');
+  smEl.style.display = 'block';
+  running = false; $('hc-start').disabled = false; $('hc-stop').disabled = true;
+}
 
 // ==================== Drag & Drop ====================
 async function traverseEntry(entry) {
@@ -593,6 +681,9 @@ function initDropZones() {
   });
   setupDrop('fcb-path', 'fi-file-b', (files) => {
     if (files.length) { fcFileB = files[0]; const el = $('fcb-path'); el.textContent = fcFileB.name + ' (' + (fcFileB.size/1024/1024).toFixed(1) + ' MB)'; el.classList.remove('empty'); }
+  });
+  setupDrop('hc-path', 'fi-hc-file', (files) => {
+    if (files.length) { hcFile = files[0]; const el = $('hc-path'); el.textContent = hcFile.name + ' (' + (hcFile.size/1024/1024).toFixed(1) + ' MB)'; el.classList.remove('empty'); }
   });
 }
 
