@@ -45,13 +45,16 @@ tr:hover{background:#f8f8fa}
 .summary.green{background:#d4edda;color:#155724}.summary.red{background:#f8d7da;color:#721c24}.summary.orange{background:#fff3cd;color:#856404}
 .hint{font-size:12px;color:#999;margin-top:4px}
 .field .path-display.dragover{border-color:#0071e3;background:#eef6ff;color:#0071e3}
+.lang-btn{margin-left:auto}
 </style>
 </head>
 <body>
 <div class="header">
-  <h1>File Integrity Checker</h1>
+  <h1 id="app-title">File Integrity Checker</h1>
   <span class="badge">SHA-256</span>
   <span class="badge">Offline</span>
+  <span style="flex:1"></span>
+  <button class="btn btn-secondary lang-btn" id="lang-btn" onclick="toggleLang()" style="font-size:12px;padding:5px 14px">中文</button>
 </div>
 <div class="tabs" id="tabbar"></div>
 <div class="content" id="panels"></div>
@@ -173,6 +176,173 @@ let results = [];
 
 function stopAll() { running = false; }
 
+// ==================== i18n ====================
+const LANG = {
+  en: {
+    title: 'File Integrity Checker',
+    tab_compare: 'Compare Folders',
+    tab_files: 'Compare Files',
+    tab_generate: 'Generate Checksums',
+    tab_verify: 'Verify Checksums',
+    cmp_title: 'Compare Two Folders',
+    folder_a: 'Folder A:',
+    folder_b: 'Folder B:',
+    drop_folder: 'Drop folder here or click Browse',
+    cmp_hint: 'Select or drag-and-drop two folders to compare. Files are matched by relative path and verified by SHA-256 hash.',
+    btn_start_compare: 'Start Compare',
+    btn_stop: 'Stop',
+    btn_clear_cache: 'Clear Cache',
+    btn_save_report: 'Save Report',
+    btn_browse: 'Browse',
+    ready: 'Ready.',
+    results: 'Results',
+    col_file: 'File',
+    col_status: 'Status',
+    col_details: 'Details',
+    fc_title: 'Compare Two Files',
+    file_a: 'File A:',
+    file_b: 'File B:',
+    drop_file: 'Drop file here or click Browse',
+    fc_hint: 'Select or drag-and-drop two files to compare their SHA-256 hashes.',
+    btn_compare: 'Compare',
+    no_comparison: 'No comparison run yet.',
+    match_yes: 'MATCH - Files are identical!',
+    match_no: 'DIFFERENT - Files do NOT match!',
+    gen_title: 'Generate Checksum File',
+    source_folder: 'Source Folder:',
+    gen_hint: 'Select or drag-and-drop a folder. Generates a SHA-256 checksum file for all files. Download to use on another machine.',
+    btn_generate: 'Generate',
+    gen_checksums: 'Generated Checksums',
+    ver_title: 'Verify Files Against Checksum',
+    checksum_file: 'Checksum File:',
+    target_folder: 'Target Folder:',
+    drop_txt: 'Drop .txt file here or click Browse',
+    flexible_label: 'Flexible matching (ignore folder structure, match by filename or content)',
+    flexible_hint: 'Enable flexible matching when files may be in different subdirectories on the target machine.',
+    btn_start_verify: 'Start Verify',
+    alert_select_folders: 'Please select both folders.',
+    alert_select_files: 'Please select both files.',
+    alert_select_folder: 'Please select a folder.',
+    alert_select_both: 'Please select both checksum file and target folder.',
+    alert_no_results: 'No results.',
+    alert_cache_cleared: 'Cache cleared.',
+    lang_toggle: '中文',
+  },
+  zh: {
+    title: '文件完整性校验',
+    tab_compare: '文件夹对比',
+    tab_files: '文件对比',
+    tab_generate: '生成校验码',
+    tab_verify: '校验验证',
+    cmp_title: '对比两个文件夹',
+    folder_a: '文件夹 A：',
+    folder_b: '文件夹 B：',
+    drop_folder: '拖拽文件夹到此处或点击浏览',
+    cmp_hint: '选择或拖拽两个文件夹进行对比。文件按相对路径匹配，通过 SHA-256 哈希值验证。',
+    btn_start_compare: '开始对比',
+    btn_stop: '停止',
+    btn_clear_cache: '清除缓存',
+    btn_save_report: '保存报告',
+    btn_browse: '浏览',
+    ready: '就绪',
+    results: '结果',
+    col_file: '文件',
+    col_status: '状态',
+    col_details: '详情',
+    fc_title: '对比两个文件',
+    file_a: '文件 A：',
+    file_b: '文件 B：',
+    drop_file: '拖拽文件到此处或点击浏览',
+    fc_hint: '选择或拖拽两个文件，通过 SHA-256 哈希值对比。',
+    btn_compare: '对比',
+    no_comparison: '尚未运行对比。',
+    match_yes: '一致 - 文件完全相同！',
+    match_no: '不同 - 文件不匹配！',
+    gen_title: '生成校验码文件',
+    source_folder: '源文件夹：',
+    gen_hint: '选择或拖拽一个文件夹。为所有文件生成 SHA-256 校验码，下载后可在其他机器上验证。',
+    btn_generate: '生成',
+    gen_checksums: '已生成的校验码',
+    ver_title: '校验码验证',
+    checksum_file: '校验码文件：',
+    target_folder: '目标文件夹：',
+    drop_txt: '拖拽 .txt 文件到此处或点击浏览',
+    flexible_label: '灵活匹配（忽略目录结构，按文件名或内容匹配）',
+    flexible_hint: '当目标机器上的文件可能在不同子目录中时，启用灵活匹配。',
+    btn_start_verify: '开始验证',
+    alert_select_folders: '请选择两个文件夹。',
+    alert_select_files: '请选择两个文件。',
+    alert_select_folder: '请选择一个文件夹。',
+    alert_select_both: '请同时选择校验码文件和目标文件夹。',
+    alert_no_results: '没有结果。',
+    alert_cache_cleared: '缓存已清除。',
+    lang_toggle: 'EN',
+  }
+};
+
+function detectLang() {
+  const saved = localStorage.getItem('fic_lang');
+  if (saved === 'en' || saved === 'zh') return saved;
+  return navigator.language.startsWith('zh') ? 'zh' : 'en';
+}
+
+let currentLang = detectLang();
+
+function t(key) {
+  return LANG[currentLang][key] || LANG.en[key] || key;
+}
+
+function toggleLang() {
+  currentLang = currentLang === 'en' ? 'zh' : 'en';
+  localStorage.setItem('fic_lang', currentLang);
+  rebuildUI();
+}
+
+function rebuildUI() {
+  document.documentElement.lang = currentLang === 'zh' ? 'zh-CN' : 'en';
+  document.title = t('title');
+  $('app-title').textContent = t('title');
+  $('lang-btn').textContent = t('lang_toggle');
+  $('tabbar').innerHTML = '';
+  buildTabs();
+  $('panels').innerHTML = '';
+  buildPanels();
+  restoreUIState();
+  initDropZones();
+}
+
+function restoreUIState() {
+  if (cmpA && cmpA.files.length) {
+    const el = $('cmp-a-path');
+    if (el) { el.textContent = cmpA.name + ' (' + cmpA.files.length + ' files)'; el.classList.remove('empty'); }
+  }
+  if (cmpB && cmpB.files.length) {
+    const el = $('cmp-b-path');
+    if (el) { el.textContent = cmpB.name + ' (' + cmpB.files.length + ' files)'; el.classList.remove('empty'); }
+  }
+  if (genData && genData.files.length) {
+    const el = $('gen-path');
+    if (el) { el.textContent = genData.name + ' (' + genData.files.length + ' files)'; el.classList.remove('empty'); }
+  }
+  if (verDir && verDir.files.length) {
+    const el = $('ver-dir-path');
+    if (el) { el.textContent = verDir.name + ' (' + verDir.files.length + ' files)'; el.classList.remove('empty'); }
+  }
+  if (verCsText) {
+    const csInput = $('fi-ver-cs');
+    const el = $('ver-cs-path');
+    if (el && csInput.files.length) { el.textContent = csInput.files[0].name; el.classList.remove('empty'); }
+  }
+  if (fcFileA) {
+    const el = $('fca-path');
+    if (el) { el.textContent = fcFileA.name + ' (' + (fcFileA.size / 1024 / 1024).toFixed(1) + ' MB)'; el.classList.remove('empty'); }
+  }
+  if (fcFileB) {
+    const el = $('fcb-path');
+    if (el) { el.textContent = fcFileB.name + ' (' + (fcFileB.size / 1024 / 1024).toFixed(1) + ' MB)'; el.classList.remove('empty'); }
+  }
+}
+
 // ==================== UI Helpers ====================
 function $(id) { return document.getElementById(id); }
 function statusTag(s) { return `<span class="tag tag-${s.toLowerCase()}">${s}</span>`; }
@@ -194,10 +364,10 @@ function downloadText(text, filename) {
 
 // ==================== Tab System ====================
 const TABS = [
-  { id: 'compare', label: 'Compare Folders' },
-  { id: 'files', label: 'Compare Files' },
-  { id: 'generate', label: 'Generate Checksums' },
-  { id: 'verify', label: 'Verify Checksums' }
+  { id: 'compare', labelKey: 'tab_compare' },
+  { id: 'files', labelKey: 'tab_files' },
+  { id: 'generate', labelKey: 'tab_generate' },
+  { id: 'verify', labelKey: 'tab_verify' }
 ];
 let activeTab = 'compare';
 
@@ -212,7 +382,7 @@ function buildTabs() {
   TABS.forEach(t => {
     const d = document.createElement('div');
     d.className = 'tab' + (t.id === activeTab ? ' active' : '');
-    d.textContent = t.label;
+    d.textContent = t(t.labelKey);
     d.dataset.id = t.id;
     d.onclick = () => switchTab(t.id);
     bar.appendChild(d);
@@ -221,83 +391,83 @@ function buildTabs() {
 
 function buildPanels() {
   $('panels').innerHTML = `
-  <div class="panel active" id="p-compare">
+  <div class="panel${activeTab === 'compare' ? ' active' : ''}" id="p-compare">
     <div class="card">
-      <h3>Compare Two Folders</h3>
-      <div class="field"><label>Folder A:</label><div class="path-display empty" id="cmp-a-path">Drop folder here or click Browse</div><button class="btn btn-browse" onclick="$('fi-cmp-a').click()">Browse</button></div>
-      <div class="field"><label>Folder B:</label><div class="path-display empty" id="cmp-b-path">Drop folder here or click Browse</div><button class="btn btn-browse" onclick="$('fi-cmp-b').click()">Browse</button></div>
-      <p class="hint">Select or drag-and-drop two folders to compare. Files are matched by relative path and verified by SHA-256 hash.</p>
+      <h3>${t('cmp_title')}</h3>
+      <div class="field"><label>${t('folder_a')}</label><div class="path-display empty" id="cmp-a-path">${t('drop_folder')}</div><button class="btn btn-browse" onclick="$('fi-cmp-a').click()">${t('btn_browse')}</button></div>
+      <div class="field"><label>${t('folder_b')}</label><div class="path-display empty" id="cmp-b-path">${t('drop_folder')}</div><button class="btn btn-browse" onclick="$('fi-cmp-b').click()">${t('btn_browse')}</button></div>
+      <p class="hint">${t('cmp_hint')}</p>
       <div class="btn-row">
-        <button class="btn btn-primary" id="cmp-start" onclick="startCompare()">Start Compare</button>
-        <button class="btn btn-danger" id="cmp-stop" onclick="stopAll()" disabled>Stop</button>
-        <button class="btn btn-secondary" onclick="clearCache()">Clear Cache</button>
-        <button class="btn btn-secondary" onclick="saveReport('cmp')">Save Report</button>
+        <button class="btn btn-primary" id="cmp-start" onclick="startCompare()">${t('btn_start_compare')}</button>
+        <button class="btn btn-danger" id="cmp-stop" onclick="stopAll()" disabled>${t('btn_stop')}</button>
+        <button class="btn btn-secondary" onclick="clearCache()">${t('btn_clear_cache')}</button>
+        <button class="btn btn-secondary" onclick="saveReport('cmp')">${t('btn_save_report')}</button>
       </div>
       <div class="progress-bar"><div class="progress-fill" id="cmp-prog"></div></div>
-      <div class="status-text" id="cmp-status">Ready.</div>
+      <div class="status-text" id="cmp-status">${t('ready')}</div>
     </div>
-    <div class="card"><h3>Results</h3><div class="results-wrap"><table><thead><tr><th>File</th><th>Status</th><th>Details</th></tr></thead><tbody id="cmp-tbody"></tbody></table></div>
+    <div class="card"><h3>${t('results')}</h3><div class="results-wrap"><table><thead><tr><th>${t('col_file')}</th><th>${t('col_status')}</th><th>${t('col_details')}</th></tr></thead><tbody id="cmp-tbody"></tbody></table></div>
     <div class="summary" id="cmp-summary" style="display:none"></div></div>
   </div>
 
-  <div class="panel" id="p-files">
+  <div class="panel${activeTab === 'files' ? ' active' : ''}" id="p-files">
     <div class="card">
-      <h3>Compare Two Files</h3>
-      <div class="field"><label>File A:</label><div class="path-display empty" id="fca-path">Drop file here or click Browse</div><button class="btn btn-browse" onclick="$('fi-file-a').click()">Browse</button></div>
-      <div class="field"><label>File B:</label><div class="path-display empty" id="fcb-path">Drop file here or click Browse</div><button class="btn btn-browse" onclick="$('fi-file-b').click()">Browse</button></div>
-      <p class="hint">Select or drag-and-drop two files to compare their SHA-256 hashes.</p>
+      <h3>${t('fc_title')}</h3>
+      <div class="field"><label>${t('file_a')}</label><div class="path-display empty" id="fca-path">${t('drop_file')}</div><button class="btn btn-browse" onclick="$('fi-file-a').click()">${t('btn_browse')}</button></div>
+      <div class="field"><label>${t('file_b')}</label><div class="path-display empty" id="fcb-path">${t('drop_file')}</div><button class="btn btn-browse" onclick="$('fi-file-b').click()">${t('btn_browse')}</button></div>
+      <p class="hint">${t('fc_hint')}</p>
       <div class="btn-row">
-        <button class="btn btn-primary" id="fc-start" onclick="startFileCompare()">Compare</button>
-        <button class="btn btn-danger" id="fc-stop" onclick="stopAll()" disabled>Stop</button>
+        <button class="btn btn-primary" id="fc-start" onclick="startFileCompare()">${t('btn_compare')}</button>
+        <button class="btn btn-danger" id="fc-stop" onclick="stopAll()" disabled>${t('btn_stop')}</button>
       </div>
       <div class="progress-bar"><div class="progress-fill" id="fc-prog"></div></div>
-      <div class="status-text" id="fc-status">Ready.</div>
+      <div class="status-text" id="fc-status">${t('ready')}</div>
     </div>
     <div class="card">
-      <h3>Results</h3>
-      <div id="fc-result" style="padding:10px;font-size:14px;color:#666">No comparison run yet.</div>
+      <h3>${t('results')}</h3>
+      <div id="fc-result" style="padding:10px;font-size:14px;color:#666">${t('no_comparison')}</div>
       <div class="summary" id="fc-summary" style="display:none"></div>
     </div>
   </div>
 
-  <div class="panel" id="p-generate">
+  <div class="panel${activeTab === 'generate' ? ' active' : ''}" id="p-generate">
     <div class="card">
-      <h3>Generate Checksum File</h3>
-      <div class="field"><label>Source Folder:</label><div class="path-display empty" id="gen-path">Drop folder here or click Browse</div><button class="btn btn-browse" onclick="$('fi-gen').click()">Browse</button></div>
-      <p class="hint">Select or drag-and-drop a folder. Generates a SHA-256 checksum file for all files. Download to use on another machine.</p>
+      <h3>${t('gen_title')}</h3>
+      <div class="field"><label>${t('source_folder')}</label><div class="path-display empty" id="gen-path">${t('drop_folder')}</div><button class="btn btn-browse" onclick="$('fi-gen').click()">${t('btn_browse')}</button></div>
+      <p class="hint">${t('gen_hint')}</p>
       <div class="btn-row">
-        <button class="btn btn-success" id="gen-start" onclick="startGenerate()">Generate</button>
-        <button class="btn btn-danger" id="gen-stop" onclick="stopAll()" disabled>Stop</button>
+        <button class="btn btn-success" id="gen-start" onclick="startGenerate()">${t('btn_generate')}</button>
+        <button class="btn btn-danger" id="gen-stop" onclick="stopAll()" disabled>${t('btn_stop')}</button>
       </div>
       <div class="progress-bar"><div class="progress-fill" id="gen-prog"></div></div>
-      <div class="status-text" id="gen-status">Ready.</div>
+      <div class="status-text" id="gen-status">${t('ready')}</div>
     </div>
-    <div class="card"><h3>Generated Checksums</h3><div class="results-wrap"><table><thead><tr><th>File</th><th style="font-family:monospace">SHA-256</th></tr></thead><tbody id="gen-tbody"></tbody></table></div>
+    <div class="card"><h3>${t('gen_checksums')}</h3><div class="results-wrap"><table><thead><tr><th>${t('col_file')}</th><th style="font-family:monospace">SHA-256</th></tr></thead><tbody id="gen-tbody"></tbody></table></div>
     <div class="summary" id="gen-summary" style="display:none"></div></div>
   </div>
 
-  <div class="panel" id="p-verify">
+  <div class="panel${activeTab === 'verify' ? ' active' : ''}" id="p-verify">
     <div class="card">
-      <h3>Verify Files Against Checksum</h3>
-      <div class="field"><label>Checksum File:</label><div class="path-display empty" id="ver-cs-path">Drop .txt file here or click Browse</div><button class="btn btn-browse" onclick="$('fi-ver-cs').click()">Browse</button></div>
-      <div class="field"><label>Target Folder:</label><div class="path-display empty" id="ver-dir-path">Drop folder here or click Browse</div><button class="btn btn-browse" onclick="$('fi-ver-dir').click()">Browse</button></div>
+      <h3>${t('ver_title')}</h3>
+      <div class="field"><label>${t('checksum_file')}</label><div class="path-display empty" id="ver-cs-path">${t('drop_txt')}</div><button class="btn btn-browse" onclick="$('fi-ver-cs').click()">${t('btn_browse')}</button></div>
+      <div class="field"><label>${t('target_folder')}</label><div class="path-display empty" id="ver-dir-path">${t('drop_folder')}</div><button class="btn btn-browse" onclick="$('fi-ver-dir').click()">${t('btn_browse')}</button></div>
       <div class="field" style="margin-top:6px">
         <label></label>
         <label style="width:auto;display:flex;align-items:center;gap:6px;cursor:pointer">
-          <input type="checkbox" id="ver-flexible"> <span style="font-size:13px">Flexible matching (ignore folder structure, match by filename or content)</span>
+          <input type="checkbox" id="ver-flexible"> <span style="font-size:13px">${t('flexible_label')}</span>
         </label>
       </div>
-      <p class="hint">Enable flexible matching when files may be in different subdirectories on the target machine.</p>
+      <p class="hint">${t('flexible_hint')}</p>
       <div class="btn-row">
-        <button class="btn btn-primary" id="ver-start" onclick="startVerify()">Start Verify</button>
-        <button class="btn btn-danger" id="ver-stop" onclick="stopAll()" disabled>Stop</button>
-        <button class="btn btn-secondary" onclick="clearCache()">Clear Cache</button>
-        <button class="btn btn-secondary" onclick="saveReport('ver')">Save Report</button>
+        <button class="btn btn-primary" id="ver-start" onclick="startVerify()">${t('btn_start_verify')}</button>
+        <button class="btn btn-danger" id="ver-stop" onclick="stopAll()" disabled>${t('btn_stop')}</button>
+        <button class="btn btn-secondary" onclick="clearCache()">${t('btn_clear_cache')}</button>
+        <button class="btn btn-secondary" onclick="saveReport('ver')">${t('btn_save_report')}</button>
       </div>
       <div class="progress-bar"><div class="progress-fill" id="ver-prog"></div></div>
-      <div class="status-text" id="ver-status">Ready.</div>
+      <div class="status-text" id="ver-status">${t('ready')}</div>
     </div>
-    <div class="card"><h3>Results</h3><div class="results-wrap"><table><thead><tr><th>File</th><th>Status</th><th>Details</th></tr></thead><tbody id="ver-tbody"></tbody></table></div>
+    <div class="card"><h3>${t('results')}</h3><div class="results-wrap"><table><thead><tr><th>${t('col_file')}</th><th>${t('col_status')}</th><th>${t('col_details')}</th></tr></thead><tbody id="ver-tbody"></tbody></table></div>
     <div class="summary" id="ver-summary" style="display:none"></div></div>
   </div>`;
 }
@@ -446,7 +616,7 @@ $('fi-file-b').addEventListener('change', function() {
 });
 
 async function startFileCompare() {
-  if (!fcFileA || !fcFileB) { alert('Please select both files.'); return; }
+  if (!fcFileA || !fcFileB) { alert(t('alert_select_files')); return; }
   running = true;
   $('fc-start').disabled = true; $('fc-stop').disabled = false;
   const resEl = $('fc-result');
@@ -469,14 +639,14 @@ async function startFileCompare() {
   const match = hA === hB;
   resEl.innerHTML = `
     <table style="width:100%;border-collapse:collapse;font-size:13px">
-      <tr><td style="padding:8px;font-weight:600;width:80px">File A:</td><td style="padding:8px">${fcFileA.name} (${(fcFileA.size/1024/1024).toFixed(2)} MB)</td></tr>
+      <tr><td style="padding:8px;font-weight:600;width:80px">${t('file_a')}</td><td style="padding:8px">${fcFileA.name} (${(fcFileA.size/1024/1024).toFixed(2)} MB)</td></tr>
       <tr><td style="padding:8px;font-weight:600">SHA-256:</td><td style="padding:8px;font-family:monospace;font-size:11px;word-break:break-all">${hA}</td></tr>
       <tr><td colspan="2" style="padding:4px"></td></tr>
-      <tr><td style="padding:8px;font-weight:600">File B:</td><td style="padding:8px">${fcFileB.name} (${(fcFileB.size/1024/1024).toFixed(2)} MB)</td></tr>
+      <tr><td style="padding:8px;font-weight:600">${t('file_b')}</td><td style="padding:8px">${fcFileB.name} (${(fcFileB.size/1024/1024).toFixed(2)} MB)</td></tr>
       <tr><td style="padding:8px;font-weight:600">SHA-256:</td><td style="padding:8px;font-family:monospace;font-size:11px;word-break:break-all">${hB}</td></tr>
     </table>`;
 
-  smEl.textContent = match ? 'MATCH - Files are identical!' : 'DIFFERENT - Files do NOT match!';
+  smEl.textContent = match ? t('match_yes') : t('match_no');
   smEl.className = 'summary ' + (match ? 'green' : 'red');
   smEl.style.display = 'block';
   running = false; $('fc-start').disabled = false; $('fc-stop').disabled = true;
@@ -484,7 +654,7 @@ async function startFileCompare() {
 
 // ==================== Compare ====================
 async function startCompare() {
-  if (!cmpA || !cmpB || !cmpA.files.length || !cmpB.files.length) { alert('Please select both folders.'); return; }
+  if (!cmpA || !cmpB || !cmpA.files.length || !cmpB.files.length) { alert(t('alert_select_folders')); return; }
   running = true;
   $('cmp-start').disabled = true; $('cmp-stop').disabled = false;
   $('cmp-tbody').innerHTML = '';
@@ -596,7 +766,7 @@ async function startCompare() {
 
 // ==================== Generate ====================
 async function startGenerate() {
-  if (!genData || !genData.files.length) { alert('Please select a folder.'); return; }
+  if (!genData || !genData.files.length) { alert(t('alert_select_folder')); return; }
   running = true;
   $('gen-start').disabled = true; $('gen-stop').disabled = false;
   $('gen-tbody').innerHTML = '';
@@ -635,7 +805,7 @@ async function startGenerate() {
 
 // ==================== Verify ====================
 async function startVerify() {
-  if (!verCsText || !verDir || !verDir.files.length) { alert('Please select both checksum file and target folder.'); return; }
+  if (!verCsText || !verDir || !verDir.files.length) { alert(t('alert_select_both')); return; }
   running = true;
   $('ver-start').disabled = true; $('ver-stop').disabled = false;
   $('ver-tbody').innerHTML = '';
@@ -786,10 +956,10 @@ async function startVerify() {
 }
 
 // ==================== Utilities ====================
-function clearCache() { localStorage.removeItem(CACHE_KEY); alert('Cache cleared.'); }
+function clearCache() { localStorage.removeItem(CACHE_KEY); alert(t('alert_cache_cleared')); }
 
 function saveReport(prefix) {
-  if (!results.length) { alert('No results.'); return; }
+  if (!results.length) { alert(t('alert_no_results')); return; }
   const sm = $(prefix + '-summary');
   const lines = [
     'Verification Report - ' + new Date().toLocaleString(),
@@ -804,9 +974,7 @@ function saveReport(prefix) {
 }
 
 // ==================== Init ====================
-buildTabs();
-buildPanels();
-initDropZones();
+rebuildUI();
 </script>
 </body>
 </html>

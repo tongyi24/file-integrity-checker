@@ -1,3 +1,5 @@
+**English** | [中文](README.zh-CN.md)
+
 # File Integrity Checker
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
