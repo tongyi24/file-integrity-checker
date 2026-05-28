@@ -282,6 +282,7 @@ const LANG = {
     btn_filter_fail: 'Failed',
     btn_filter_missing: 'Missing',
     btn_filter_extra: 'Extra',
+    btn_filter_relocated: 'Relocated',
     notify_complete: 'Verification Complete',
     btn_tree_view: 'Tree View',
     btn_table_view: 'Table View',
@@ -393,6 +394,7 @@ const LANG = {
     btn_filter_fail: '失败',
     btn_filter_missing: '缺失',
     btn_filter_extra: '多余',
+    btn_filter_relocated: '已移动',
     notify_complete: '校验完成',
     btn_tree_view: '树形视图',
     btn_table_view: '表格视图',
@@ -537,7 +539,7 @@ function saveCSV(prefix) {
   downloadText(lines.join('\n'), prefix + '_report_' + new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-') + '.csv');
 }
 
-const FILTER_MAP = { ok: ['OK', 'CACHED'], fail: ['FAIL'], missing: ['MISSING', 'MISSING_B'], extra: ['EXTRA'] };
+const FILTER_MAP = { ok: ['OK', 'CACHED'], fail: ['FAIL'], missing: ['MISSING', 'MISSING_B'], extra: ['EXTRA'], relocated: ['RELOCATED'] };
 
 function matchesFilter(status, filter) {
   if (filter === 'all') return true;
@@ -563,7 +565,8 @@ function buildFilterBar(prefix, statuses) {
     { k: 'ok', label: 'btn_filter_ok' },
     { k: 'fail', label: 'btn_filter_fail' },
     { k: 'missing', label: 'btn_filter_missing' },
-    { k: 'extra', label: 'btn_filter_extra' }
+    { k: 'extra', label: 'btn_filter_extra' },
+    { k: 'relocated', label: 'btn_filter_relocated' }
   ];
   for (const d of defs) {
     if (statuses.some(s => (FILTER_MAP[d.k] || []).includes(s))) all.push(d);
