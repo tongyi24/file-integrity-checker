@@ -29,7 +29,8 @@ Transferring large files between machines (Mac → Windows, NAS → laptop, clou
 | **Multi-language** | Chinese/English UI with auto-detection, one-click toggle, and persistent preference |
 | **Flexible Matching** | Cross-machine verification that ignores directory structure differences — matches by filename or content hash |
 | **Smart Caching** | Caches hashes in `localStorage`; unchanged files verify instantly on subsequent runs |
-| **Streaming Hash** | Pure JavaScript SHA-256 processes files in 4MB chunks — handles multi-GB files without memory issues |
+| **Web Worker Hash** | SHA-256 runs in a background thread — UI stays smooth even during large file processing |
+| **Installable (PWA)** | Install to your desktop from the browser — runs like a native app with its own window and icon |
 
 ## Quick Start
 
