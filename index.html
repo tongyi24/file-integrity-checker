@@ -206,6 +206,8 @@ function cacheKey(name, rel, size, mtime) { return `${name}/${rel}|${size}|${mti
 // ==================== State ====================
 let running = false;
 let results = [];
+let resultsSource = null;
+let lastSummary = null;
 
 function stopAll() { running = false; }
 
@@ -286,6 +288,40 @@ const LANG = {
     or_select_files: 'Or select files:',
     drop_files: 'Drop files here or click Browse',
     copied: 'Copied!',
+    status_ok: 'OK',
+    status_fail: 'FAIL',
+    status_cached: 'CACHED',
+    status_missing: 'MISSING',
+    status_missing_b: 'MISSING_B',
+    status_extra: 'EXTRA',
+    status_relocated: 'RELOCATED',
+    status_done: 'DONE',
+    status_warning: 'WARNING',
+    detail_hash_mismatch: 'Hash mismatch',
+    detail_only_in_a: 'Only in A',
+    detail_only_in_b: 'Only in B',
+    detail_not_found: 'File not found',
+    detail_not_found_flex: 'File not found (even with flexible matching)',
+    detail_same_content: 'Same content',
+    detail_matched: 'Matched',
+    detail_content_match: 'Content match',
+    summary_all_match: 'ALL MATCH!',
+    summary_all_passed: 'ALL PASSED!',
+    summary_stopped: 'Stopped.',
+    summary_passed: 'Passed',
+    summary_failed: 'Failed',
+    summary_missing: 'Missing',
+    summary_extra: 'Extra',
+    summary_relocated: 'Relocated',
+    summary_cached: 'Cached',
+    summary_flex_matched: 'Flex-matched',
+    summary_total: 'Total',
+    summary_generated: 'Generated',
+    summary_checksums: 'checksums. File downloaded.',
+    progress_hashing_a: 'Hashing File A...',
+    progress_hashing_b: 'Hashing File B...',
+    progress_done: 'Done.',
+    progress_content_matching: 'Content-based matching for remaining files...',
   },
   zh: {
     title: '文件完整性校验',
@@ -362,6 +398,40 @@ const LANG = {
     or_select_files: '或选择文件：',
     drop_files: '拖拽文件到此处或点击浏览',
     copied: '已复制！',
+    status_ok: '通过',
+    status_fail: '失败',
+    status_cached: '缓存',
+    status_missing: '缺失',
+    status_missing_b: '仅在 A',
+    status_extra: '多余',
+    status_relocated: '已移动',
+    status_done: '完成',
+    status_warning: '警告',
+    detail_hash_mismatch: '哈希不匹配',
+    detail_only_in_a: '仅在 A 中',
+    detail_only_in_b: '仅在 B 中',
+    detail_not_found: '文件未找到',
+    detail_not_found_flex: '文件未找到（即使使用灵活匹配）',
+    detail_same_content: '内容相同',
+    detail_matched: '匹配',
+    detail_content_match: '内容匹配',
+    summary_all_match: '全部一致！',
+    summary_all_passed: '全部通过！',
+    summary_stopped: '已停止。',
+    summary_passed: '通过',
+    summary_failed: '失败',
+    summary_missing: '缺失',
+    summary_extra: '多余',
+    summary_relocated: '已移动',
+    summary_cached: '缓存',
+    summary_flex_matched: '灵活匹配',
+    summary_total: '总计',
+    summary_generated: '已生成',
+    summary_checksums: '个校验码，文件已下载。',
+    progress_hashing_a: '正在计算文件 A 的哈希...',
+    progress_hashing_b: '正在计算文件 B 的哈希...',
+    progress_done: '完成。',
+    progress_content_matching: '正在对剩余文件进行内容匹配...',
   }
 };
 
@@ -508,6 +578,10 @@ function insertIntoTree(root, path, file) {
   }
 }
 
+function escHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 function renderTreeNode(node, indent) {
   let html = '';
   const keys = Object.keys(node).sort((a, b) => {
@@ -517,10 +591,11 @@ function renderTreeNode(node, indent) {
   });
   for (const k of keys) {
     const n = node[k];
+    const ek = escHtml(k);
     if (n.type === 'file') {
-      html += `<div style="padding:3px 0;padding-left:${indent}px">📄 ${k} ${statusTag(n.data.status)}</div>`;
+      html += `<div style="padding:3px 0;padding-left:${indent}px">📄 ${ek} ${statusTag(n.data.status)}</div>`;
     } else {
-      html += `<div style="padding:3px 0;padding-left:${indent}px;cursor:pointer;font-weight:500" onclick="this.nextElementSibling.classList.toggle('collapsed')">📁 ${k}</div>`;
+      html += `<div style="padding:3px 0;padding-left:${indent}px;cursor:pointer;font-weight:500" onclick="this.nextElementSibling.classList.toggle('collapsed')">📁 ${ek}</div>`;
       html += `<div class="tree-children">${renderTreeNode(n.children, indent + 20)}</div>`;
     }
   }
@@ -541,8 +616,8 @@ function toggleCmpView() {
   const tableWrap = $('cmp-table-wrap');
   const treeWrap = $('cmp-tree-wrap');
   if (btn) btn.textContent = cmpViewMode === 'table' ? t('btn_tree_view') : t('btn_table_view');
-  if (tableWrap) tableWrap.style.display = cmpViewMode === 'table' ? '' : 'none';
-  if (treeWrap) { treeWrap.style.display = cmpViewMode === 'tree' ? '' : 'none'; if (cmpViewMode === 'tree') refreshCmpTree(); }
+  if (tableWrap) tableWrap.style.display = cmpViewMode === 'table' ? 'block' : 'none';
+  if (treeWrap) { treeWrap.style.display = cmpViewMode === 'tree' ? 'block' : 'none'; if (cmpViewMode === 'tree') refreshCmpTree(); }
 }
 
 const TAB_IDS = ['compare', 'files', 'generate', 'hash', 'verify'];
@@ -636,11 +711,107 @@ function restoreUIState() {
     if (el) { el.textContent = hcFile.name + ' (' + (hcFile.size / 1024 / 1024).toFixed(1) + ' MB)'; el.classList.remove('empty'); }
   }
   restoreCmpView();
+  restoreResultTables();
 }
 
 // ==================== UI Helpers ====================
 function $(id) { return document.getElementById(id); }
-function statusTag(s) { return `<span class="tag tag-${s.toLowerCase()}">${s}</span>`; }
+function statusTag(s) {
+  const key = 'status_' + s.toLowerCase().replace('_b', '_b');
+  const display = t(key) || s;
+  return `<span class="tag tag-${s.toLowerCase()}">${display}</span>`;
+}
+
+function translateDetail(d) {
+  if (!d) return '';
+  const map = {
+    'Hash mismatch': 'detail_hash_mismatch',
+    'Only in A': 'detail_only_in_a',
+    'Only in B': 'detail_only_in_b',
+    'Not found': 'detail_not_found',
+    'File not found': 'detail_not_found',
+    'File not found (even with flexible matching)': 'detail_not_found_flex',
+  };
+  if (map[d]) return t(map[d]);
+  if (d.startsWith('Matched: ')) return `${t('detail_matched')}: ${d.slice(9)}`;
+  if (d.startsWith('Content match: ')) return `${t('detail_content_match')}: ${d.slice(15)}`;
+  const m = d.match(/^A:(.+) = B:(.+)$/);
+  if (m) return `${t('detail_same_content')}: A:${m[1]} = B:${m[2]}`;
+  return d;
+}
+
+function formatSummary(s) {
+  if (!s) return '';
+  if (s.stopped) return t('summary_stopped');
+  if (s.kind === 'gen') return `${t('summary_generated')} ${s.count} ${t('summary_checksums')}`;
+  if (s.kind === 'cmp') {
+    if (s.failed === 0 && s.missing === 0 && s.extra === 0) {
+      const parts = [`${t('summary_all_match')} ${t('summary_passed')}: ${s.passed}`];
+      if (s.relocated) parts.push(`${t('summary_relocated')}: ${s.relocated}`);
+      if (s.cachedN) parts.push(`${t('summary_cached')}: ${s.cachedN}`);
+      return parts.join(' | ');
+    }
+    const parts = [`${t('summary_passed')}: ${s.passed}`];
+    if (s.relocated) parts.push(`${t('summary_relocated')}: ${s.relocated}`);
+    if (s.failed) parts.push(`${t('summary_failed')}: ${s.failed}`);
+    if (s.missing) parts.push(`${t('summary_missing')}: ${s.missing}`);
+    if (s.extra) parts.push(`${t('summary_extra')}: ${s.extra}`);
+    return parts.join(' | ');
+  }
+  if (s.kind === 'ver') {
+    if (s.failed === 0 && s.missing === 0) {
+      const parts = [`${t('summary_all_passed')} ${t('summary_passed')}: ${s.passed}`];
+      if (s.cachedN) parts.push(`${t('summary_cached')}: ${s.cachedN}`);
+      if (s.flexMatched) parts.push(`${t('summary_flex_matched')}: ${s.flexMatched}`);
+      parts.push(`${t('summary_total')}: ${s.total}`);
+      return parts.join(' | ');
+    }
+    const parts = [`${t('summary_passed')}: ${s.passed}`];
+    if (s.cachedN) parts.push(`${t('summary_cached')}: ${s.cachedN}`);
+    if (s.flexMatched) parts.push(`${t('summary_flex_matched')}: ${s.flexMatched}`);
+    if (s.failed) parts.push(`${t('summary_failed')}: ${s.failed}`);
+    if (s.missing) parts.push(`${t('summary_missing')}: ${s.missing}`);
+    parts.push(`${t('summary_total')}: ${s.total}`);
+    return parts.join(' | ');
+  }
+  return '';
+}
+
+function restoreResultTables() {
+  if (!results.length || !resultsSource) return;
+  if (resultsSource === 'cmp') {
+    const tbody = $('cmp-tbody');
+    if (tbody) {
+      tbody.innerHTML = '';
+      for (const r of results) addRow(tbody, [r.file, r.status, translateDetail(r.detail)]);
+    }
+    const fb = $('cmp-filter-bar');
+    if (fb) fb.innerHTML = buildFilterBar('cmp', results.map(r => r.status));
+    if (cmpViewMode === 'tree') refreshCmpTree();
+  } else if (resultsSource === 'ver') {
+    const tbody = $('ver-tbody');
+    if (tbody) {
+      tbody.innerHTML = '';
+      for (const r of results) addRow(tbody, [r.file, r.status, translateDetail(r.detail)]);
+    }
+    const fb = $('ver-filter-bar');
+    if (fb) fb.innerHTML = buildFilterBar('ver', results.map(r => r.status));
+  } else if (resultsSource === 'gen') {
+    const tbody = $('gen-tbody');
+    if (tbody) {
+      tbody.innerHTML = '';
+      for (const r of results) addGenRow(r.file, r.detail);
+    }
+  }
+  if (lastSummary) {
+    const smEl = $(lastSummary.elId);
+    if (smEl) {
+      smEl.textContent = formatSummary(lastSummary);
+      smEl.className = 'summary ' + lastSummary.color;
+      smEl.style.display = 'block';
+    }
+  }
+}
 
 function addRow(tbody, cols) {
   const tr = document.createElement('tr');
@@ -873,9 +1044,9 @@ function restoreCmpView() {
   const treeWrap = $('cmp-tree-wrap');
   if (!btn) return;
   btn.textContent = cmpViewMode === 'table' ? t('btn_tree_view') : t('btn_table_view');
-  if (tableWrap) tableWrap.style.display = cmpViewMode === 'table' ? '' : 'none';
+  if (tableWrap) tableWrap.style.display = cmpViewMode === 'table' ? 'block' : 'none';
   if (treeWrap) {
-    treeWrap.style.display = cmpViewMode === 'tree' ? '' : 'none';
+    treeWrap.style.display = cmpViewMode === 'tree' ? 'block' : 'none';
     if (cmpViewMode === 'tree') refreshCmpTree();
   }
 }
@@ -935,13 +1106,13 @@ async function startHashCheck() {
   $('hc-start').disabled = true; $('hc-stop').disabled = false;
   const resEl = $('hc-result');
   const smEl = $('hc-summary'); smEl.style.display = 'none';
-  resEl.innerHTML = '<p style="color:#888">Hashing...</p>';
-  $('hc-status').textContent = 'Hashing...';
+  resEl.innerHTML = '<p style="color:#888">' + t('progress_hashing_a') + '</p>';
+  $('hc-status').textContent = t('progress_hashing_a');
   $('hc-prog').style.width = '0%';
   const h = await hashFile(hcFile, p => { $('hc-prog').style.width = (p * 100) + '%'; });
-  if (!running) { resEl.innerHTML = '<p>Stopped.</p>'; $('hc-start').disabled=false; $('hc-stop').disabled=true; return; }
+  if (!running) { resEl.innerHTML = '<p>' + t('summary_stopped') + '</p>'; $('hc-start').disabled=false; $('hc-stop').disabled=true; return; }
   $('hc-prog').style.width = '100%';
-  $('hc-status').textContent = 'Done.';
+  $('hc-status').textContent = t('progress_done');
   const match = h === expected;
   resEl.innerHTML = `
     <table style="width:100%;border-collapse:collapse;font-size:13px">
@@ -1076,20 +1247,20 @@ async function startFileCompare() {
   $('fc-start').disabled = true; $('fc-stop').disabled = false;
   const resEl = $('fc-result');
   const smEl = $('fc-summary'); smEl.style.display = 'none';
-  resEl.innerHTML = '<p style="color:#888">Computing hash for File A...</p>';
+  resEl.innerHTML = '<p style="color:#888">' + t('progress_hashing_a') + '</p>';
 
-  $('fc-status').textContent = 'Hashing File A...';
+  $('fc-status').textContent = t('progress_hashing_a');
   $('fc-prog').style.width = '0%';
   const hA = await hashFile(fcFileA, p => { $('fc-prog').style.width = (p * 50) + '%'; });
-  if (!running) { resEl.innerHTML = '<p>Stopped.</p>'; $('fc-start').disabled=false; $('fc-stop').disabled=true; return; }
+  if (!running) { resEl.innerHTML = '<p>' + t('summary_stopped') + '</p>'; $('fc-start').disabled=false; $('fc-stop').disabled=true; return; }
 
-  resEl.innerHTML += '<p style="color:#888">Computing hash for File B...</p>';
-  $('fc-status').textContent = 'Hashing File B...';
+  resEl.innerHTML += '<p style="color:#888">' + t('progress_hashing_b') + '</p>';
+  $('fc-status').textContent = t('progress_hashing_b');
   const hB = await hashFile(fcFileB, p => { $('fc-prog').style.width = (50 + p * 50) + '%'; });
-  if (!running) { resEl.innerHTML = '<p>Stopped.</p>'; $('fc-start').disabled=false; $('fc-stop').disabled=true; return; }
+  if (!running) { resEl.innerHTML = '<p>' + t('summary_stopped') + '</p>'; $('fc-start').disabled=false; $('fc-stop').disabled=true; return; }
 
   $('fc-prog').style.width = '100%';
-  $('fc-status').textContent = 'Done.';
+  $('fc-status').textContent = t('progress_done');
 
   const match = hA === hB;
   resEl.innerHTML = `
@@ -1116,6 +1287,8 @@ async function startCompare() {
   $('cmp-tbody').innerHTML = '';
   const smEl = $('cmp-summary'); smEl.style.display = 'none';
   results = [];
+  resultsSource = 'cmp';
+  lastSummary = null;
 
   const cache = loadCache();
   const bMap = {};
@@ -1157,7 +1330,7 @@ async function startCompare() {
       passed++;
       if (tag === 'CACHED') cachedN++;
     } else {
-      addRow($('cmp-tbody'), [fa.rel, 'FAIL', 'Hash mismatch']);
+      addRow($('cmp-tbody'), [fa.rel, 'FAIL', t('detail_hash_mismatch')]);
       results.push({ file: fa.rel, status: 'FAIL', detail: 'Hash mismatch' });
       failed++;
     }
@@ -1184,17 +1357,17 @@ async function startCompare() {
       const cands = bByHash[a.hash];
       if (cands && cands.length) {
         const matchRel = cands.shift();
-        addRow($('cmp-tbody'), [a.rel, 'RELOCATED', `Same content: A:${a.rel} = B:${matchRel}`]);
+        addRow($('cmp-tbody'), [a.rel, 'RELOCATED', `${t('detail_same_content')}: A:${a.rel} = B:${matchRel}`]);
         results.push({ file: a.rel, status: 'RELOCATED', detail: `A:${a.rel} = B:${matchRel}` });
         relocated++;
         unmatchedBList.splice(unmatchedBList.findIndex(x => x.rel === matchRel), 1);
       } else stillMissing.push(a.rel);
     }
-    for (const r of stillMissing) { addRow($('cmp-tbody'), [r, 'MISSING_B', 'Only in A']); results.push({file:r,status:'MISSING_B',detail:'Only in A'}); }
-    for (const b of unmatchedBList) { addRow($('cmp-tbody'), [b.rel, 'EXTRA', 'Only in B']); results.push({file:b.rel,status:'EXTRA',detail:'Only in B'}); }
+    for (const r of stillMissing) { addRow($('cmp-tbody'), [r, 'MISSING_B', t('detail_only_in_a')]); results.push({file:r,status:'MISSING_B',detail:'Only in A'}); }
+    for (const b of unmatchedBList) { addRow($('cmp-tbody'), [b.rel, 'EXTRA', t('detail_only_in_b')]); results.push({file:b.rel,status:'EXTRA',detail:'Only in B'}); }
   } else {
-    for (const a of unmatchedA) { addRow($('cmp-tbody'), [a.rel, 'MISSING_B', 'Only in A']); results.push({file:a.rel,status:'MISSING_B',detail:'Only in A'}); }
-    for (const b of unmatchedBList) { addRow($('cmp-tbody'), [b.rel, 'EXTRA', 'Only in B']); results.push({file:b.rel,status:'EXTRA',detail:'Only in B'}); }
+    for (const a of unmatchedA) { addRow($('cmp-tbody'), [a.rel, 'MISSING_B', t('detail_only_in_a')]); results.push({file:a.rel,status:'MISSING_B',detail:'Only in A'}); }
+    for (const b of unmatchedBList) { addRow($('cmp-tbody'), [b.rel, 'EXTRA', t('detail_only_in_b')]); results.push({file:b.rel,status:'EXTRA',detail:'Only in B'}); }
   }
 
   saveCache(cache);
@@ -1202,22 +1375,23 @@ async function startCompare() {
   const extra = results.filter(r=>r.status==='EXTRA').length;
 
   let summaryText, summaryColor;
-  if (!running) { summaryText = 'Stopped.'; summaryColor = 'orange'; }
+  if (!running) { summaryText = t('summary_stopped'); summaryColor = 'orange'; }
   else if (failed === 0 && missing === 0 && extra === 0) {
-    const parts = [`ALL MATCH! Passed: ${passed}`];
-    if (relocated) parts.push(`Relocated: ${relocated}`);
-    if (cachedN) parts.push(`Cached: ${cachedN}`);
+    const parts = [`${t('summary_all_match')} ${t('summary_passed')}: ${passed}`];
+    if (relocated) parts.push(`${t('summary_relocated')}: ${relocated}`);
+    if (cachedN) parts.push(`${t('summary_cached')}: ${cachedN}`);
     summaryText = parts.join(' | '); summaryColor = 'green';
   } else {
-    const parts = [`Passed: ${passed}`];
-    if (relocated) parts.push(`Relocated: ${relocated}`);
-    if (failed) parts.push(`Failed: ${failed}`);
-    if (missing) parts.push(`Missing: ${missing}`);
-    if (extra) parts.push(`Extra: ${extra}`);
+    const parts = [`${t('summary_passed')}: ${passed}`];
+    if (relocated) parts.push(`${t('summary_relocated')}: ${relocated}`);
+    if (failed) parts.push(`${t('summary_failed')}: ${failed}`);
+    if (missing) parts.push(`${t('summary_missing')}: ${missing}`);
+    if (extra) parts.push(`${t('summary_extra')}: ${extra}`);
     summaryText = parts.join(' | '); summaryColor = failed ? 'red' : 'orange';
   }
   smEl.textContent = summaryText; smEl.className = 'summary ' + summaryColor; smEl.style.display = 'block';
-  $('cmp-status').textContent = 'Done.'; $('cmp-prog').style.width = '100%';
+  lastSummary = { elId: 'cmp-summary', color: summaryColor, kind: 'cmp', stopped: !running, passed, failed, missing, extra, relocated, cachedN };
+  $('cmp-status').textContent = t('progress_done'); $('cmp-prog').style.width = '100%';
   const fb = $('cmp-filter-bar');
   if (fb) fb.innerHTML = buildFilterBar('cmp', results.map(r => r.status));
   if (cmpViewMode === 'tree') refreshCmpTree();
@@ -1234,6 +1408,8 @@ async function startGenerate() {
   $('gen-tbody').innerHTML = '';
   const smEl = $('gen-summary'); smEl.style.display = 'none';
   results = [];
+  resultsSource = 'gen';
+  lastSummary = null;
 
   const total = src.files.length;
   const lines = [];
@@ -1254,13 +1430,16 @@ async function startGenerate() {
 
   if (running) {
     downloadText(lines.join('\n') + '\n', src.name + '_checksums.txt');
-    smEl.textContent = `Generated ${lines.length} checksums. File downloaded.`;
+    const genSummary = `${t('summary_generated')} ${lines.length} ${t('summary_checksums')}`;
+    smEl.textContent = genSummary;
     smEl.className = 'summary green'; smEl.style.display = 'block';
-    notifyComplete(`Generated ${lines.length} checksums.`);
+    lastSummary = { elId: 'gen-summary', color: 'green', kind: 'gen', stopped: false, count: lines.length };
+    notifyComplete(genSummary);
   } else {
-    smEl.textContent = 'Stopped.'; smEl.className = 'summary orange'; smEl.style.display = 'block';
+    smEl.textContent = t('summary_stopped'); smEl.className = 'summary orange'; smEl.style.display = 'block';
+    lastSummary = { elId: 'gen-summary', color: 'orange', kind: 'gen', stopped: true, count: lines.length };
   }
-  $('gen-status').textContent = 'Done.'; $('gen-prog').style.width = '100%';
+  $('gen-status').textContent = t('progress_done'); $('gen-prog').style.width = '100%';
   running = false; $('gen-start').disabled = false; $('gen-stop').disabled = true;
 }
 
@@ -1272,6 +1451,8 @@ async function startVerify() {
   $('ver-tbody').innerHTML = '';
   const smEl = $('ver-summary'); smEl.style.display = 'none';
   results = [];
+  resultsSource = 'ver';
+  lastSummary = null;
 
   const flexible = $('ver-flexible').checked;
   const cache = loadCache();
@@ -1328,7 +1509,7 @@ async function startVerify() {
       if (flexible) {
         unmatchedEntries.push(e);
       } else {
-        addRow($('ver-tbody'), [e.rel, 'MISSING', 'File not found']);
+        addRow($('ver-tbody'), [e.rel, 'MISSING', t('detail_not_found')]);
         results.push({ file: e.rel, status: 'MISSING', detail: 'Not found' });
         missing++;
       }
@@ -1339,10 +1520,10 @@ async function startVerify() {
     const ck = cacheKey(verDir.name, fd.rel, fd.file.size, fd.file.lastModified);
     let h = cache[ck];
     if (h && h === e.expected) {
-      const detail = (fd.rel !== e.rel) ? `Matched: ${fd.rel}` : '';
+      const detail = (fd.rel !== e.rel) ? `${t('detail_matched')}: ${fd.rel}` : '';
       const tag = (fd.rel !== e.rel) ? 'OK' : 'CACHED';
       addRow($('ver-tbody'), [e.rel, tag, detail]);
-      results.push({ file: e.rel, status: tag, detail });
+      results.push({ file: e.rel, status: tag, detail: fd.rel !== e.rel ? `Matched: ${fd.rel}` : '' });
       passed++;
       if (tag === 'CACHED') cachedN++;
       if (fd.rel !== e.rel) flexMatched++;
@@ -1352,20 +1533,20 @@ async function startVerify() {
     if (!h) { h = await hashFile(fd.file); cache[ck] = h; }
 
     if (h === e.expected) {
-      const detail = (fd.rel !== e.rel) ? `Matched: ${fd.rel}` : '';
+      const detail = (fd.rel !== e.rel) ? `${t('detail_matched')}: ${fd.rel}` : '';
       addRow($('ver-tbody'), [e.rel, 'OK', detail]);
-      results.push({ file: e.rel, status: 'OK', detail });
+      results.push({ file: e.rel, status: 'OK', detail: fd.rel !== e.rel ? `Matched: ${fd.rel}` : '' });
       passed++;
       if (fd.rel !== e.rel) flexMatched++;
     } else {
-      addRow($('ver-tbody'), [e.rel, 'FAIL', 'Hash mismatch']);
+      addRow($('ver-tbody'), [e.rel, 'FAIL', t('detail_hash_mismatch')]);
       results.push({ file: e.rel, status: 'FAIL', detail: 'Hash mismatch' });
       failed++;
     }
   }
 
   if (flexible && unmatchedEntries.length) {
-    $('ver-status').textContent = 'Content-based matching for remaining files...';
+    $('ver-status').textContent = t('progress_content_matching');
     await new Promise(r => setTimeout(r, 0));
     const unusedFiles = verDir.files.filter(f => !usedFiles.has(f.rel));
     const unusedHashes = {};
@@ -1381,12 +1562,12 @@ async function startVerify() {
       const cands = unusedHashes[e.expected];
       if (cands && cands.length) {
         const matchRel = cands.shift();
-        addRow($('ver-tbody'), [e.rel, 'OK', `Content match: ${matchRel}`]);
+        addRow($('ver-tbody'), [e.rel, 'OK', `${t('detail_content_match')}: ${matchRel}`]);
         results.push({ file: e.rel, status: 'OK', detail: `Content match: ${matchRel}` });
         passed++;
         flexMatched++;
       } else {
-        addRow($('ver-tbody'), [e.rel, 'MISSING', 'File not found (even with flexible matching)']);
+        addRow($('ver-tbody'), [e.rel, 'MISSING', t('detail_not_found_flex')]);
         results.push({ file: e.rel, status: 'MISSING', detail: 'Not found' });
         missing++;
       }
@@ -1395,24 +1576,25 @@ async function startVerify() {
 
   saveCache(cache);
   let summaryText, summaryColor;
-  if (!running) { summaryText = 'Stopped.'; summaryColor = 'orange'; }
+  if (!running) { summaryText = t('summary_stopped'); summaryColor = 'orange'; }
   else if (failed === 0 && missing === 0) {
-    const parts = [`ALL PASSED! Passed: ${passed}`];
-    if (cachedN) parts.push(`Cached: ${cachedN}`);
-    if (flexMatched) parts.push(`Flex-matched: ${flexMatched}`);
-    parts.push(`Total: ${total}`);
+    const parts = [`${t('summary_all_passed')} ${t('summary_passed')}: ${passed}`];
+    if (cachedN) parts.push(`${t('summary_cached')}: ${cachedN}`);
+    if (flexMatched) parts.push(`${t('summary_flex_matched')}: ${flexMatched}`);
+    parts.push(`${t('summary_total')}: ${total}`);
     summaryText = parts.join(' | '); summaryColor = 'green';
   } else {
-    const parts = [`Passed: ${passed}`];
-    if (cachedN) parts.push(`Cached: ${cachedN}`);
-    if (flexMatched) parts.push(`Flex-matched: ${flexMatched}`);
-    if (failed) parts.push(`Failed: ${failed}`);
-    if (missing) parts.push(`Missing: ${missing}`);
-    parts.push(`Total: ${total}`);
+    const parts = [`${t('summary_passed')}: ${passed}`];
+    if (cachedN) parts.push(`${t('summary_cached')}: ${cachedN}`);
+    if (flexMatched) parts.push(`${t('summary_flex_matched')}: ${flexMatched}`);
+    if (failed) parts.push(`${t('summary_failed')}: ${failed}`);
+    if (missing) parts.push(`${t('summary_missing')}: ${missing}`);
+    parts.push(`${t('summary_total')}: ${total}`);
     summaryText = parts.join(' | '); summaryColor = 'red';
   }
   smEl.textContent = summaryText; smEl.className = 'summary ' + summaryColor; smEl.style.display = 'block';
-  $('ver-status').textContent = 'Done.'; $('ver-prog').style.width = '100%';
+  lastSummary = { elId: 'ver-summary', color: summaryColor, kind: 'ver', stopped: !running, passed, failed, missing, cachedN, flexMatched, total };
+  $('ver-status').textContent = t('progress_done'); $('ver-prog').style.width = '100%';
   const vfb = $('ver-filter-bar');
   if (vfb) vfb.innerHTML = buildFilterBar('ver', results.map(r => r.status));
   notifyComplete(summaryText);
