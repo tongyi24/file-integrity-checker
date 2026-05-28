@@ -25,6 +25,8 @@ Transferring large files between machines (Mac → Windows, NAS → laptop, clou
 | **Compare Files** | Compare two individual files byte-by-byte |
 | **Generate Checksums** | Create `sha256sum`-compatible checksum files for any folder |
 | **Verify Checksums** | Verify files against a previously generated checksum file |
+| **Hash Check** | Verify a single file against a known SHA-256 hash value — just paste the hash and select your file |
+| **Multi-language** | Chinese/English UI with auto-detection, one-click toggle, and persistent preference |
 | **Flexible Matching** | Cross-machine verification that ignores directory structure differences — matches by filename or content hash |
 | **Smart Caching** | Caches hashes in `localStorage`; unchanged files verify instantly on subsequent runs |
 | **Streaming Hash** | Pure JavaScript SHA-256 processes files in 4MB chunks — handles multi-GB files without memory issues |
@@ -85,7 +87,7 @@ When verifying files transferred between machines (e.g., Mac → Windows):
 ## Technical Details
 
 - **Single HTML file** — CSS + JavaScript embedded, zero build step
-- **~25KB total** — Smaller than most favicons
+- **~30KB total** — Smaller than most favicons
 - **SHA-256** — Hand-written streaming implementation (message schedule, compression, proper padding)
 - **4MB chunked reading** — Processes multi-GB files without memory pressure
 - **Three-tier flexible matching** — Path → Filename → Content hash (progressive fallback)
@@ -114,6 +116,7 @@ Works on any OS with a modern browser:
 | Flexible matching | Yes | No | No | No |
 | Caching | Yes | No | No | No |
 | GUI | Yes | No | Yes | Yes |
+| Multi-language | Yes (EN/中文) | No | No | Varies |
 
 ## Contributing
 
