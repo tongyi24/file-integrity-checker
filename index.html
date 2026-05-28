@@ -48,6 +48,33 @@ tr:hover{background:#f8f8fa}
 .hint{font-size:12px;color:#999;margin-top:4px}
 .field .path-display.dragover{border-color:#0071e3;background:#eef6ff;color:#0071e3}
 .lang-btn{margin-left:auto}
+.copyable{cursor:pointer;position:relative}.copyable:hover{color:#0071e3}
+.copied-tip{position:absolute;top:-24px;right:0;background:#333;color:#fff;padding:2px 8px;border-radius:4px;font-size:11px;pointer-events:none}
+.filter-bar{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap}
+.filter-btn{padding:4px 12px;border:1px solid #d0d0d0;background:#fff;border-radius:14px;font-size:12px;cursor:pointer}
+.filter-btn.active{background:#0071e3;color:#fff;border-color:#0071e3}
+.shortcuts-hint{text-align:center;font-size:11px;color:#999;padding:12px 20px 20px}
+.tree-wrap{max-height:420px;overflow-y:auto;border:1px solid #e0e0e0;border-radius:8px;padding:8px;font-size:13px}
+.tree-children.collapsed{display:none}
+body.dark{background:#1a1a2e;color:#e0e0e0}
+body.dark .tabs{background:#2a2a3e;border-bottom-color:#444}
+body.dark .tab{color:#aaa}body.dark .tab:hover{color:#e0e0e0}body.dark .tab.active{color:#0071e3}
+body.dark .card{background:#2a2a3e;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+body.dark .card h3{color:#e0e0e0}
+body.dark .field label{color:#bbb}
+body.dark .field .path-display{background:#1a1a2e;border-color:#444;color:#e0e0e0}
+body.dark .field .path-display.empty{color:#888}
+body.dark th{background:#1a1a2e;border-bottom-color:#444;color:#e0e0e0}
+body.dark td{border-bottom-color:#333}
+body.dark tr:hover{background:#333350}
+body.dark .results-wrap{border-color:#444}
+body.dark .filter-btn{background:#2a2a3e;border-color:#444;color:#e0e0e0}
+body.dark .filter-btn.active{background:#0071e3;color:#fff}
+body.dark .btn-secondary{background:#444;color:#e0e0e0}
+body.dark .hint{color:#888}
+body.dark .status-text{color:#888}
+body.dark .tree-wrap{border-color:#444}
+body.dark .shortcuts-hint{color:#666}
 </style>
 </head>
 <body>
@@ -56,13 +83,16 @@ tr:hover{background:#f8f8fa}
   <span class="badge">SHA-256</span>
   <span class="badge">Offline</span>
   <span style="flex:1"></span>
+  <button class="btn btn-secondary lang-btn" id="theme-btn" onclick="toggleTheme()" style="font-size:12px;padding:5px 14px" title="Toggle theme">🌙</button>
   <button class="btn btn-secondary lang-btn" id="lang-btn" onclick="toggleLang()" style="font-size:12px;padding:5px 14px">中文</button>
 </div>
 <div class="tabs" id="tabbar"></div>
 <div class="content" id="panels"></div>
+<div class="shortcuts-hint" id="shortcuts-hint"></div>
 <input type="file" id="fi-cmp-a" webkitdirectory style="display:none">
 <input type="file" id="fi-cmp-b" webkitdirectory style="display:none">
 <input type="file" id="fi-gen" webkitdirectory style="display:none">
+<input type="file" id="fi-gen-files" multiple style="display:none">
 <input type="file" id="fi-ver-dir" webkitdirectory style="display:none">
 <input type="file" id="fi-ver-cs" accept=".txt" style="display:none">
 <input type="file" id="fi-file-a" style="display:none">
@@ -243,6 +273,19 @@ const LANG = {
     hc_no_result: 'No verification run yet.',
     alert_hc_both: 'Please select a file and enter a hash value.',
     lang_toggle: '中文',
+    shortcuts_hint: 'Shortcuts: 1-5 switch tabs, Enter to start, Esc to stop',
+    btn_save_csv: 'Save CSV',
+    btn_filter_all: 'All',
+    btn_filter_ok: 'OK',
+    btn_filter_fail: 'Failed',
+    btn_filter_missing: 'Missing',
+    btn_filter_extra: 'Extra',
+    notify_complete: 'Verification Complete',
+    btn_tree_view: 'Tree View',
+    btn_table_view: 'Table View',
+    or_select_files: 'Or select files:',
+    drop_files: 'Drop files here or click Browse',
+    copied: 'Copied!',
   },
   zh: {
     title: '文件完整性校验',
@@ -306,6 +349,19 @@ const LANG = {
     hc_no_result: '尚未运行验证。',
     alert_hc_both: '请选择文件并输入哈希值。',
     lang_toggle: 'EN',
+    shortcuts_hint: '快捷键：1-5 切换标签，Enter 开始，Esc 停止',
+    btn_save_csv: '导出 CSV',
+    btn_filter_all: '全部',
+    btn_filter_ok: '通过',
+    btn_filter_fail: '失败',
+    btn_filter_missing: '缺失',
+    btn_filter_extra: '多余',
+    notify_complete: '校验完成',
+    btn_tree_view: '树形视图',
+    btn_table_view: '表格视图',
+    or_select_files: '或选择文件：',
+    drop_files: '拖拽文件到此处或点击浏览',
+    copied: '已复制！',
   }
 };
 
@@ -316,6 +372,203 @@ function detectLang() {
 }
 
 let currentLang = detectLang();
+let darkMode = localStorage.getItem('fic_theme');
+if (darkMode === null) darkMode = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+let cmpViewMode = 'table';
+let notifyPermRequested = false;
+
+function applyTheme() {
+  document.body.classList.toggle('dark', darkMode === 'dark');
+  const tb = $('theme-btn');
+  if (tb) tb.textContent = darkMode === 'dark' ? '☀️' : '🌙';
+}
+
+function toggleTheme() {
+  darkMode = darkMode === 'dark' ? 'light' : 'dark';
+  localStorage.setItem('fic_theme', darkMode);
+  applyTheme();
+}
+
+function copyHash(text, el) {
+  navigator.clipboard.writeText(text).then(() => {
+    const tip = document.createElement('span');
+    tip.className = 'copied-tip';
+    tip.textContent = t('copied');
+    el.appendChild(tip);
+    setTimeout(() => tip.remove(), 1200);
+  }).catch(() => {});
+}
+
+function copyableHashHtml(hash) {
+  const esc = hash.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  return `<span class="copyable" style="font-family:monospace;font-size:11px" data-hash="${esc}" onclick="copyHash(this.dataset.hash,this)" title="Copy">📋 ${esc}</span>`;
+}
+
+function formatETA(seconds) {
+  if (!isFinite(seconds) || seconds < 0 || seconds === Infinity) return '';
+  if (seconds < 60) return '~' + Math.round(seconds) + 's';
+  const m = Math.floor(seconds / 60);
+  const s = Math.round(seconds % 60);
+  return '~' + m + 'm ' + s + 's';
+}
+
+function updateProgressStatus(elId, current, total, label, startTime) {
+  const elapsed = (Date.now() - startTime) / 1000;
+  const rate = current > 0 ? elapsed / current : 0;
+  const remaining = rate > 0 ? (total - current) * rate : 0;
+  const eta = formatETA(remaining);
+  let msg = `Processing ${current}/${total} files...`;
+  if (label) msg += ' ' + label;
+  if (eta) msg += ' ETA: ' + eta;
+  $(elId).textContent = msg;
+}
+
+function playBeep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.frequency.setValueAtTime(440, ctx.currentTime);
+    osc.frequency.linearRampToValueAtTime(880, ctx.currentTime + 0.2);
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.2);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.2);
+  } catch (e) {}
+}
+
+function notifyComplete(body) {
+  playBeep();
+  if (document.hidden) {
+    if (!notifyPermRequested && Notification.permission === 'default') {
+      notifyPermRequested = true;
+      Notification.requestPermission();
+    }
+    if (Notification.permission === 'granted') {
+      new Notification(t('notify_complete'), { body: body || '' });
+    }
+  }
+}
+
+function csvEscape(s) {
+  s = String(s ?? '');
+  if (s.includes(',') || s.includes('"') || s.includes('\n')) return '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+
+function saveCSV(prefix) {
+  if (!results.length) { alert(t('alert_no_results')); return; }
+  const lines = ['File,Status,Details'];
+  for (const r of results) lines.push([csvEscape(r.file), csvEscape(r.status), csvEscape(r.detail || '')].join(','));
+  downloadText(lines.join('\n'), prefix + '_report_' + new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-') + '.csv');
+}
+
+const FILTER_MAP = { ok: ['OK', 'CACHED'], fail: ['FAIL'], missing: ['MISSING', 'MISSING_B'], extra: ['EXTRA'] };
+
+function setFilter(prefix, filter, btn) {
+  const bar = $(prefix + '-filter-bar');
+  if (bar) bar.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', b === btn));
+  const tbody = $(prefix + '-tbody');
+  if (!tbody) return;
+  tbody.querySelectorAll('tr').forEach(tr => {
+    const st = tr.dataset.status || '';
+    if (filter === 'all') tr.style.display = '';
+    else tr.style.display = (FILTER_MAP[filter] || []).includes(st) ? '' : 'none';
+  });
+}
+
+function buildFilterBar(prefix, statuses) {
+  const all = [{ k: 'all', label: 'btn_filter_all' }];
+  const defs = [
+    { k: 'ok', label: 'btn_filter_ok' },
+    { k: 'fail', label: 'btn_filter_fail' },
+    { k: 'missing', label: 'btn_filter_missing' },
+    { k: 'extra', label: 'btn_filter_extra' }
+  ];
+  for (const d of defs) {
+    if (statuses.some(s => (FILTER_MAP[d.k] || []).includes(s))) all.push(d);
+  }
+  return all.map(d =>
+    `<button class="filter-btn${d.k === 'all' ? ' active' : ''}" data-filter="${d.k}" onclick="setFilter('${prefix}','${d.k}',this)">${t(d.label)}</button>`
+  ).join('');
+}
+
+function insertIntoTree(root, path, file) {
+  const parts = path.replace(/\\/g, '/').split('/');
+  let cur = root;
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i];
+    if (i === parts.length - 1) {
+      cur[p] = { type: 'file', data: file };
+    } else {
+      if (!cur[p] || cur[p].type === 'file') cur[p] = { type: 'folder', children: {} };
+      cur = cur[p].children;
+    }
+  }
+}
+
+function renderTreeNode(node, indent) {
+  let html = '';
+  const keys = Object.keys(node).sort((a, b) => {
+    const ta = node[a].type, tb = node[b].type;
+    if (ta !== tb) return ta === 'folder' ? -1 : 1;
+    return a.localeCompare(b);
+  });
+  for (const k of keys) {
+    const n = node[k];
+    if (n.type === 'file') {
+      html += `<div style="padding:3px 0;padding-left:${indent}px">📄 ${k} ${statusTag(n.data.status)}</div>`;
+    } else {
+      html += `<div style="padding:3px 0;padding-left:${indent}px;cursor:pointer;font-weight:500" onclick="this.nextElementSibling.classList.toggle('collapsed')">📁 ${k}</div>`;
+      html += `<div class="tree-children">${renderTreeNode(n.children, indent + 20)}</div>`;
+    }
+  }
+  return html;
+}
+
+function refreshCmpTree() {
+  const wrap = $('cmp-tree-wrap');
+  if (!wrap || !results.length) { if (wrap) wrap.innerHTML = ''; return; }
+  const root = {};
+  for (const r of results) insertIntoTree(root, r.file, r);
+  wrap.innerHTML = renderTreeNode(root, 0);
+}
+
+function toggleCmpView() {
+  cmpViewMode = cmpViewMode === 'table' ? 'tree' : 'table';
+  const btn = $('cmp-view-toggle');
+  const tableWrap = $('cmp-table-wrap');
+  const treeWrap = $('cmp-tree-wrap');
+  if (btn) btn.textContent = cmpViewMode === 'table' ? t('btn_tree_view') : t('btn_table_view');
+  if (tableWrap) tableWrap.style.display = cmpViewMode === 'table' ? '' : 'none';
+  if (treeWrap) { treeWrap.style.display = cmpViewMode === 'tree' ? '' : 'none'; if (cmpViewMode === 'tree') refreshCmpTree(); }
+}
+
+const TAB_IDS = ['compare', 'files', 'generate', 'hash', 'verify'];
+
+function getTabAction() {
+  return { compare: startCompare, files: startFileCompare, generate: startGenerate, hash: startHashCheck, verify: startVerify }[activeTab];
+}
+
+function isInputFocused() {
+  const el = document.activeElement;
+  return el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && running) { stopAll(); return; }
+  if (isInputFocused()) return;
+  if (e.key >= '1' && e.key <= '5' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+    const idx = parseInt(e.key, 10) - 1;
+    if (TAB_IDS[idx]) switchTab(TAB_IDS[idx]);
+    return;
+  }
+  if ((e.key === 'Enter') && !running) {
+    const fn = getTabAction();
+    if (fn) { e.preventDefault(); fn(); }
+  }
+});
 
 function t(key) {
   return LANG[currentLang][key] || LANG.en[key] || key;
@@ -332,12 +585,16 @@ function rebuildUI() {
   document.title = t('title');
   $('app-title').textContent = t('title');
   $('lang-btn').textContent = t('lang_toggle');
+  applyTheme();
+  const sh = $('shortcuts-hint');
+  if (sh) sh.textContent = t('shortcuts_hint');
   $('tabbar').innerHTML = '';
   buildTabs();
   $('panels').innerHTML = '';
   buildPanels();
   restoreUIState();
   initDropZones();
+  initGenFilesHandlers();
 }
 
 function restoreUIState() {
@@ -352,6 +609,10 @@ function restoreUIState() {
   if (genData && genData.files.length) {
     const el = $('gen-path');
     if (el) { el.textContent = genData.name + ' (' + genData.files.length + ' files)'; el.classList.remove('empty'); }
+  }
+  if (genFilesData && genFilesData.files.length) {
+    const el = $('gen-files-path');
+    if (el) { el.textContent = genFilesData.files.length + ' files selected'; el.classList.remove('empty'); }
   }
   if (verDir && verDir.files.length) {
     const el = $('ver-dir-path');
@@ -374,6 +635,7 @@ function restoreUIState() {
     const el = $('hc-path');
     if (el) { el.textContent = hcFile.name + ' (' + (hcFile.size / 1024 / 1024).toFixed(1) + ' MB)'; el.classList.remove('empty'); }
   }
+  restoreCmpView();
 }
 
 // ==================== UI Helpers ====================
@@ -382,9 +644,20 @@ function statusTag(s) { return `<span class="tag tag-${s.toLowerCase()}">${s}</s
 
 function addRow(tbody, cols) {
   const tr = document.createElement('tr');
+  const status = cols[1];
+  tr.dataset.status = status;
   tr.innerHTML = cols.map((c, i) => `<td>${i === 1 ? statusTag(c) : c}</td>`).join('');
   tbody.appendChild(tr);
   const wrap = tbody.closest('.results-wrap');
+  if (wrap) wrap.scrollTop = wrap.scrollHeight;
+}
+
+function addGenRow(rel, hash) {
+  const tr = document.createElement('tr');
+  tr.dataset.status = 'DONE';
+  tr.innerHTML = `<td>${rel}</td><td>${copyableHashHtml(hash)}</td>`;
+  $('gen-tbody').appendChild(tr);
+  const wrap = $('gen-tbody').closest('.results-wrap');
   if (wrap) wrap.scrollTop = wrap.scrollHeight;
 }
 
@@ -442,11 +715,15 @@ function buildPanels() {
         <button class="btn btn-danger" id="cmp-stop" onclick="stopAll()" disabled>${t('btn_stop')}</button>
         <button class="btn btn-secondary" onclick="clearCache()">${t('btn_clear_cache')}</button>
         <button class="btn btn-secondary" onclick="saveReport('cmp')">${t('btn_save_report')}</button>
+        <button class="btn btn-secondary" onclick="saveCSV('cmp')">${t('btn_save_csv')}</button>
       </div>
       <div class="progress-bar"><div class="progress-fill" id="cmp-prog"></div></div>
       <div class="status-text" id="cmp-status">${t('ready')}</div>
     </div>
-    <div class="card"><h3>${t('results')}</h3><div class="results-wrap"><table><thead><tr><th>${t('col_file')}</th><th>${t('col_status')}</th><th>${t('col_details')}</th></tr></thead><tbody id="cmp-tbody"></tbody></table></div>
+    <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><h3 style="margin:0">${t('results')}</h3><button class="btn btn-secondary" id="cmp-view-toggle" onclick="toggleCmpView()" style="font-size:12px;padding:5px 14px">${t('btn_tree_view')}</button></div>
+    <div class="filter-bar" id="cmp-filter-bar">${buildFilterBar('cmp', [])}</div>
+    <div class="tree-wrap" id="cmp-tree-wrap" style="display:none"></div>
+    <div class="results-wrap" id="cmp-table-wrap"><table><thead><tr><th>${t('col_file')}</th><th>${t('col_status')}</th><th>${t('col_details')}</th></tr></thead><tbody id="cmp-tbody"></tbody></table></div>
     <div class="summary" id="cmp-summary" style="display:none"></div></div>
   </div>
 
@@ -474,6 +751,7 @@ function buildPanels() {
     <div class="card">
       <h3>${t('gen_title')}</h3>
       <div class="field"><label>${t('source_folder')}</label><div class="path-display empty" id="gen-path">${t('drop_folder')}</div><button class="btn btn-browse" onclick="$('fi-gen').click()">${t('btn_browse')}</button></div>
+      <div class="field"><label>${t('or_select_files')}</label><div class="path-display empty" id="gen-files-path">${t('drop_files')}</div><button class="btn btn-browse" onclick="$('fi-gen-files').click()">${t('btn_browse')}</button></div>
       <p class="hint">${t('gen_hint')}</p>
       <div class="btn-row">
         <button class="btn btn-success" id="gen-start" onclick="startGenerate()">${t('btn_generate')}</button>
@@ -503,11 +781,14 @@ function buildPanels() {
         <button class="btn btn-danger" id="ver-stop" onclick="stopAll()" disabled>${t('btn_stop')}</button>
         <button class="btn btn-secondary" onclick="clearCache()">${t('btn_clear_cache')}</button>
         <button class="btn btn-secondary" onclick="saveReport('ver')">${t('btn_save_report')}</button>
+        <button class="btn btn-secondary" onclick="saveCSV('ver')">${t('btn_save_csv')}</button>
       </div>
       <div class="progress-bar"><div class="progress-fill" id="ver-prog"></div></div>
       <div class="status-text" id="ver-status">${t('ready')}</div>
     </div>
-    <div class="card"><h3>${t('results')}</h3><div class="results-wrap"><table><thead><tr><th>${t('col_file')}</th><th>${t('col_status')}</th><th>${t('col_details')}</th></tr></thead><tbody id="ver-tbody"></tbody></table></div>
+    <div class="card"><h3>${t('results')}</h3>
+    <div class="filter-bar" id="ver-filter-bar">${buildFilterBar('ver', [])}</div>
+    <div class="results-wrap"><table><thead><tr><th>${t('col_file')}</th><th>${t('col_status')}</th><th>${t('col_details')}</th></tr></thead><tbody id="ver-tbody"></tbody></table></div>
     <div class="summary" id="ver-summary" style="display:none"></div></div>
   </div>
 
@@ -533,7 +814,71 @@ function buildPanels() {
 }
 
 // ==================== Folder Data ====================
-let cmpA = null, cmpB = null, genData = null, verDir = null, verCsText = '';
+let cmpA = null, cmpB = null, genData = null, genFilesData = null, verDir = null, verCsText = '';
+
+function collectFiles(input) {
+  const files = Array.from(input.files).filter(f => !f.name.startsWith('.'));
+  return {
+    name: 'files',
+    files: files.map(f => ({ rel: f.name, file: f })).sort((a, b) => a.rel.localeCompare(b.rel))
+  };
+}
+
+function getGenSource() {
+  if (genFilesData && genFilesData.files.length) return genFilesData;
+  if (genData && genData.files.length) return genData;
+  return null;
+}
+
+function initGenFilesHandlers() {
+  const fi = $('fi-gen-files');
+  if (fi && !fi._bound) {
+    fi._bound = true;
+    fi.addEventListener('change', function() {
+      if (this.files.length) {
+        genFilesData = collectFiles(this);
+        genData = null;
+        const el = $('gen-files-path');
+        if (el) { el.textContent = genFilesData.files.length + ' files selected'; el.classList.remove('empty'); }
+        const fp = $('gen-path');
+        if (fp) { fp.textContent = t('drop_folder'); fp.classList.add('empty'); }
+      }
+    });
+  }
+  const el = $('gen-files-path');
+  if (el && !el._dropBound) {
+    el._dropBound = true;
+    el.addEventListener('dragover', e => { e.preventDefault(); e.stopPropagation(); el.classList.add('dragover'); });
+    el.addEventListener('dragleave', e => { e.preventDefault(); e.stopPropagation(); el.classList.remove('dragover'); });
+    el.addEventListener('drop', e => {
+      e.preventDefault(); e.stopPropagation(); el.classList.remove('dragover');
+      const files = Array.from(e.dataTransfer.files).filter(f => !f.name.startsWith('.'));
+      if (!files.length) return;
+      genFilesData = {
+        name: 'files',
+        files: files.map(f => ({ rel: f.name, file: f })).sort((a, b) => a.rel.localeCompare(b.rel))
+      };
+      genData = null;
+      el.textContent = genFilesData.files.length + ' files selected';
+      el.classList.remove('empty');
+      const fp = $('gen-path');
+      if (fp) { fp.textContent = t('drop_folder'); fp.classList.add('empty'); }
+    });
+  }
+}
+
+function restoreCmpView() {
+  const btn = $('cmp-view-toggle');
+  const tableWrap = $('cmp-table-wrap');
+  const treeWrap = $('cmp-tree-wrap');
+  if (!btn) return;
+  btn.textContent = cmpViewMode === 'table' ? t('btn_tree_view') : t('btn_table_view');
+  if (tableWrap) tableWrap.style.display = cmpViewMode === 'table' ? '' : 'none';
+  if (treeWrap) {
+    treeWrap.style.display = cmpViewMode === 'tree' ? '' : 'none';
+    if (cmpViewMode === 'tree') refreshCmpTree();
+  }
+}
 
 $('fi-cmp-a').addEventListener('change', function() {
   cmpA = collectFolder(this);
@@ -549,9 +894,12 @@ $('fi-cmp-b').addEventListener('change', function() {
 });
 $('fi-gen').addEventListener('change', function() {
   genData = collectFolder(this);
+  genFilesData = null;
   const el = $('gen-path');
   el.textContent = genData.name + ' (' + genData.files.length + ' files)';
   el.classList.remove('empty');
+  const gfp = $('gen-files-path');
+  if (gfp) { gfp.textContent = t('drop_files'); gfp.classList.add('empty'); }
 });
 $('fi-ver-dir').addEventListener('change', function() {
   verDir = collectFolder(this);
@@ -598,13 +946,14 @@ async function startHashCheck() {
   resEl.innerHTML = `
     <table style="width:100%;border-collapse:collapse;font-size:13px">
       <tr><td style="padding:8px;font-weight:600;width:120px">${t('hc_file')}</td><td style="padding:8px">${hcFile.name} (${(hcFile.size/1024/1024).toFixed(2)} MB)</td></tr>
-      <tr><td style="padding:8px;font-weight:600">SHA-256:</td><td style="padding:8px;font-family:monospace;font-size:11px;word-break:break-all">${h}</td></tr>
+      <tr><td style="padding:8px;font-weight:600">SHA-256:</td><td style="padding:8px;word-break:break-all">${copyableHashHtml(h)}</td></tr>
       <tr><td colspan="2" style="padding:4px"></td></tr>
-      <tr><td style="padding:8px;font-weight:600">${t('hc_hash')}</td><td style="padding:8px;font-family:monospace;font-size:11px;word-break:break-all">${expected}</td></tr>
+      <tr><td style="padding:8px;font-weight:600">${t('hc_hash')}</td><td style="padding:8px;word-break:break-all">${copyableHashHtml(expected)}</td></tr>
     </table>`;
   smEl.textContent = match ? t('hc_match_yes') : t('hc_match_no');
   smEl.className = 'summary ' + (match ? 'green' : 'red');
   smEl.style.display = 'block';
+  notifyComplete(match ? t('hc_match_yes') : t('hc_match_no'));
   running = false; $('hc-start').disabled = false; $('hc-stop').disabled = true;
 }
 
@@ -676,7 +1025,10 @@ function initDropZones() {
   });
   setupDrop('gen-path', 'fi-gen', (files, name) => {
     genData = collectDroppedFolder(files, name);
+    genFilesData = null;
     const el = $('gen-path'); el.textContent = genData.name + ' (' + genData.files.length + ' files)'; el.classList.remove('empty');
+    const gfp = $('gen-files-path');
+    if (gfp) { gfp.textContent = t('drop_files'); gfp.classList.add('empty'); }
   });
   setupDrop('ver-dir-path', 'fi-ver-dir', (files, name) => {
     verDir = collectDroppedFolder(files, name);
@@ -743,15 +1095,16 @@ async function startFileCompare() {
   resEl.innerHTML = `
     <table style="width:100%;border-collapse:collapse;font-size:13px">
       <tr><td style="padding:8px;font-weight:600;width:80px">${t('file_a')}</td><td style="padding:8px">${fcFileA.name} (${(fcFileA.size/1024/1024).toFixed(2)} MB)</td></tr>
-      <tr><td style="padding:8px;font-weight:600">SHA-256:</td><td style="padding:8px;font-family:monospace;font-size:11px;word-break:break-all">${hA}</td></tr>
+      <tr><td style="padding:8px;font-weight:600">SHA-256:</td><td style="padding:8px;word-break:break-all">${copyableHashHtml(hA)}</td></tr>
       <tr><td colspan="2" style="padding:4px"></td></tr>
       <tr><td style="padding:8px;font-weight:600">${t('file_b')}</td><td style="padding:8px">${fcFileB.name} (${(fcFileB.size/1024/1024).toFixed(2)} MB)</td></tr>
-      <tr><td style="padding:8px;font-weight:600">SHA-256:</td><td style="padding:8px;font-family:monospace;font-size:11px;word-break:break-all">${hB}</td></tr>
+      <tr><td style="padding:8px;font-weight:600">SHA-256:</td><td style="padding:8px;word-break:break-all">${copyableHashHtml(hB)}</td></tr>
     </table>`;
 
   smEl.textContent = match ? t('match_yes') : t('match_no');
   smEl.className = 'summary ' + (match ? 'green' : 'red');
   smEl.style.display = 'block';
+  notifyComplete(match ? t('match_yes') : t('match_no'));
   running = false; $('fc-start').disabled = false; $('fc-stop').disabled = true;
 }
 
@@ -770,6 +1123,7 @@ async function startCompare() {
 
   const total = cmpA.files.length + Object.keys(bMap).length;
   let step = 0, passed = 0, failed = 0, relocated = 0, cachedN = 0;
+  const startTime = Date.now();
   const unmatchedA = [];
   const matchedB = new Set();
 
@@ -777,7 +1131,7 @@ async function startCompare() {
     if (!running) break;
     step++;
     $('cmp-prog').style.width = (step / total * 100) + '%';
-    $('cmp-status').textContent = `[${Math.round(step/total*100)}%] (${step}/${total}) A: ${fa.rel}`;
+    updateProgressStatus('cmp-status', step, total, 'A: ' + fa.rel, startTime);
 
     const ckA = cacheKey(cmpA.name, fa.rel, fa.file.size, fa.file.lastModified);
     let hA = cache[ckA];
@@ -815,7 +1169,7 @@ async function startCompare() {
     if (matchedB.has(fb.rel)) continue;
     step++;
     $('cmp-prog').style.width = (step / total * 100) + '%';
-    $('cmp-status').textContent = `[${Math.round(step/total*100)}%] (${step}/${total}) B: ${fb.rel}`;
+    updateProgressStatus('cmp-status', step, total, 'B: ' + fb.rel, startTime);
     const ckB = cacheKey(cmpB.name, fb.rel, fb.file.size, fb.file.lastModified);
     let hB = cache[ckB];
     if (!hB) { hB = await hashFile(fb.file); cache[ckB] = hB; }
@@ -864,41 +1218,45 @@ async function startCompare() {
   }
   smEl.textContent = summaryText; smEl.className = 'summary ' + summaryColor; smEl.style.display = 'block';
   $('cmp-status').textContent = 'Done.'; $('cmp-prog').style.width = '100%';
+  const fb = $('cmp-filter-bar');
+  if (fb) fb.innerHTML = buildFilterBar('cmp', results.map(r => r.status));
+  if (cmpViewMode === 'tree') refreshCmpTree();
+  notifyComplete(summaryText);
   running = false; $('cmp-start').disabled = false; $('cmp-stop').disabled = true;
 }
 
 // ==================== Generate ====================
 async function startGenerate() {
-  if (!genData || !genData.files.length) { alert(t('alert_select_folder')); return; }
+  const src = getGenSource();
+  if (!src || !src.files.length) { alert(t('alert_select_folder')); return; }
   running = true;
   $('gen-start').disabled = true; $('gen-stop').disabled = false;
   $('gen-tbody').innerHTML = '';
   const smEl = $('gen-summary'); smEl.style.display = 'none';
   results = [];
 
-  const total = genData.files.length;
+  const total = src.files.length;
   const lines = [];
+  const startTime = Date.now();
 
   for (let i = 0; i < total; i++) {
     if (!running) break;
-    const f = genData.files[i];
-    const pct = Math.round((i+1)/total*100);
-    $('gen-prog').style.width = pct + '%';
-    $('gen-status').textContent = `[${pct}%] (${i+1}/${total}) ${f.rel}`;
+    const f = src.files[i];
+    $('gen-prog').style.width = Math.round((i + 1) / total * 100) + '%';
+    updateProgressStatus('gen-status', i + 1, total, f.rel, startTime);
 
     const h = await hashFile(f.file);
     const unixRel = f.rel.replace(/\\/g, '/');
     lines.push(`${h.toLowerCase()}  ./${unixRel}`);
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${f.rel}</td><td style="font-family:monospace;font-size:11px">${h}</td>`;
-    $('gen-tbody').appendChild(tr);
+    addGenRow(f.rel, h);
     results.push({ file: f.rel, status: 'DONE', detail: h });
   }
 
   if (running) {
-    downloadText(lines.join('\n') + '\n', genData.name + '_checksums.txt');
+    downloadText(lines.join('\n') + '\n', src.name + '_checksums.txt');
     smEl.textContent = `Generated ${lines.length} checksums. File downloaded.`;
     smEl.className = 'summary green'; smEl.style.display = 'block';
+    notifyComplete(`Generated ${lines.length} checksums.`);
   } else {
     smEl.textContent = 'Stopped.'; smEl.className = 'summary orange'; smEl.style.display = 'block';
   }
@@ -939,15 +1297,15 @@ async function startVerify() {
 
   const total = entries.length;
   let passed = 0, failed = 0, missing = 0, cachedN = 0, flexMatched = 0;
+  const startTime = Date.now();
   const usedFiles = new Set();
   const unmatchedEntries = [];
 
   for (let i = 0; i < total; i++) {
     if (!running) break;
     const e = entries[i];
-    const pct = Math.round((i+1)/total*100);
-    $('ver-prog').style.width = pct + '%';
-    $('ver-status').textContent = `[${pct}%] (${i+1}/${total}) ${e.rel}`;
+    $('ver-prog').style.width = Math.round((i + 1) / total * 100) + '%';
+    updateProgressStatus('ver-status', i + 1, total, e.rel, startTime);
 
     let fd = fileMap[e.rel] || fileMap[e.rel.replace(/\//g, '\\')];
 
@@ -1055,6 +1413,9 @@ async function startVerify() {
   }
   smEl.textContent = summaryText; smEl.className = 'summary ' + summaryColor; smEl.style.display = 'block';
   $('ver-status').textContent = 'Done.'; $('ver-prog').style.width = '100%';
+  const vfb = $('ver-filter-bar');
+  if (vfb) vfb.innerHTML = buildFilterBar('ver', results.map(r => r.status));
+  notifyComplete(summaryText);
   running = false; $('ver-start').disabled = false; $('ver-stop').disabled = true;
 }
 
@@ -1077,6 +1438,7 @@ function saveReport(prefix) {
 }
 
 // ==================== Init ====================
+applyTheme();
 rebuildUI();
 </script>
 </body>
