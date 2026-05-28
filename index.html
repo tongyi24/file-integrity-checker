@@ -285,6 +285,7 @@ const LANG = {
     notify_complete: 'Verification Complete',
     btn_tree_view: 'Tree View',
     btn_table_view: 'Table View',
+    no_results: 'No matching results',
     or_select_files: 'Or select files:',
     drop_files: 'Drop files here or click Browse',
     copied: 'Copied!',
@@ -395,6 +396,7 @@ const LANG = {
     notify_complete: '校验完成',
     btn_tree_view: '树形视图',
     btn_table_view: '表格视图',
+    no_results: '没有匹配的结果',
     or_select_files: '或选择文件：',
     drop_files: '拖拽文件到此处或点击浏览',
     copied: '已复制！',
@@ -445,6 +447,7 @@ let currentLang = detectLang();
 let darkMode = localStorage.getItem('fic_theme');
 if (darkMode === null) darkMode = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 let cmpViewMode = 'table';
+let currentFilter = 'all';
 let notifyPermRequested = false;
 
 function applyTheme() {
@@ -536,16 +539,22 @@ function saveCSV(prefix) {
 
 const FILTER_MAP = { ok: ['OK', 'CACHED'], fail: ['FAIL'], missing: ['MISSING', 'MISSING_B'], extra: ['EXTRA'] };
 
+function matchesFilter(status, filter) {
+  if (filter === 'all') return true;
+  return (FILTER_MAP[filter] || []).includes(status);
+}
+
 function setFilter(prefix, filter, btn) {
+  currentFilter = filter;
   const bar = $(prefix + '-filter-bar');
   if (bar) bar.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', b === btn));
   const tbody = $(prefix + '-tbody');
-  if (!tbody) return;
-  tbody.querySelectorAll('tr').forEach(tr => {
-    const st = tr.dataset.status || '';
-    if (filter === 'all') tr.style.display = '';
-    else tr.style.display = (FILTER_MAP[filter] || []).includes(st) ? '' : 'none';
-  });
+  if (tbody) {
+    tbody.querySelectorAll('tr').forEach(tr => {
+      tr.style.display = matchesFilter(tr.dataset.status || '', filter) ? '' : 'none';
+    });
+  }
+  if (cmpViewMode === 'tree') refreshCmpTree();
 }
 
 function buildFilterBar(prefix, statuses) {
@@ -595,8 +604,10 @@ function renderTreeNode(node, indent) {
     if (n.type === 'file') {
       html += `<div style="padding:3px 0;padding-left:${indent}px">📄 ${ek} ${statusTag(n.data.status)}</div>`;
     } else {
+      const childHtml = renderTreeNode(n.children, indent + 20);
+      if (!childHtml) continue;
       html += `<div style="padding:3px 0;padding-left:${indent}px;cursor:pointer;font-weight:500" onclick="this.nextElementSibling.classList.toggle('collapsed')">📁 ${ek}</div>`;
-      html += `<div class="tree-children">${renderTreeNode(n.children, indent + 20)}</div>`;
+      html += `<div class="tree-children">${childHtml}</div>`;
     }
   }
   return html;
@@ -605,9 +616,10 @@ function renderTreeNode(node, indent) {
 function refreshCmpTree() {
   const wrap = $('cmp-tree-wrap');
   if (!wrap || !results.length) { if (wrap) wrap.innerHTML = ''; return; }
+  const filtered = results.filter(r => matchesFilter(r.status, currentFilter));
   const root = {};
-  for (const r of results) insertIntoTree(root, r.file, r);
-  wrap.innerHTML = renderTreeNode(root, 0);
+  for (const r of filtered) insertIntoTree(root, r.file, r);
+  wrap.innerHTML = renderTreeNode(root, 0) || `<div style="padding:16px;color:#888">${t('no_results')}</div>`;
 }
 
 function toggleCmpView() {
