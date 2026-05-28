@@ -185,10 +185,10 @@ const LANG = {
     title: 'File Integrity Checker',
     group_compare: 'Compare',
     group_verify: 'Checksum',
-    tab_compare: 'Compare Folders',
-    tab_files: 'Compare Files',
-    tab_generate: 'Generate Checksums',
-    tab_verify: 'Verify Checksums',
+    tab_compare: '📁 Compare Folders',
+    tab_files: '📄 Compare Files',
+    tab_generate: '🔑 Generate Checksums',
+    tab_verify: '✅ Verify Checksums',
     cmp_title: 'Compare Two Folders',
     folder_a: 'Folder A:',
     folder_b: 'Folder B:',
@@ -231,7 +231,7 @@ const LANG = {
     alert_select_both: 'Please select both checksum file and target folder.',
     alert_no_results: 'No results.',
     alert_cache_cleared: 'Cache cleared.',
-    tab_hash: 'Hash Check',
+    tab_hash: '🔍 Hash Check',
     hc_title: 'Verify File Against Known Hash',
     hc_file: 'File:',
     hc_hash: 'Expected Hash:',
@@ -248,10 +248,10 @@ const LANG = {
     title: '文件完整性校验',
     group_compare: '对比',
     group_verify: '校验',
-    tab_compare: '对比文件夹',
-    tab_files: '对比文件',
-    tab_generate: '生成校验码',
-    tab_verify: '批量验证',
+    tab_compare: '📁 对比文件夹',
+    tab_files: '📄 对比文件',
+    tab_generate: '🔑 生成校验码',
+    tab_verify: '✅ 批量验证',
     cmp_title: '对比两个文件夹',
     folder_a: '文件夹 A：',
     folder_b: '文件夹 B：',
@@ -294,7 +294,7 @@ const LANG = {
     alert_select_both: '请同时选择校验码文件和目标文件夹。',
     alert_no_results: '没有结果。',
     alert_cache_cleared: '缓存已清除。',
-    tab_hash: '哈希校验',
+    tab_hash: '🔍 哈希校验',
     hc_title: '用已知哈希值验证文件',
     hc_file: '文件：',
     hc_hash: '期望哈希：',
@@ -417,16 +417,7 @@ function switchTab(id) {
 
 function buildTabs() {
   const bar = $('tabbar');
-  TAB_GROUPS.forEach((group, gi) => {
-    if (gi > 0) {
-      const div = document.createElement('div');
-      div.className = 'tab-divider';
-      bar.appendChild(div);
-    }
-    const label = document.createElement('div');
-    label.className = 'tab-group-label';
-    label.textContent = t(group.groupKey);
-    bar.appendChild(label);
+  TAB_GROUPS.forEach(group => {
     group.tabs.forEach(tab => {
       const d = document.createElement('div');
       d.className = 'tab' + (tab.id === activeTab ? ' active' : '');
