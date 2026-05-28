@@ -379,12 +379,12 @@ function switchTab(id) {
 
 function buildTabs() {
   const bar = $('tabbar');
-  TABS.forEach(t => {
+  TABS.forEach(tab => {
     const d = document.createElement('div');
-    d.className = 'tab' + (t.id === activeTab ? ' active' : '');
-    d.textContent = t(t.labelKey);
-    d.dataset.id = t.id;
-    d.onclick = () => switchTab(t.id);
+    d.className = 'tab' + (tab.id === activeTab ? ' active' : '');
+    d.textContent = t(tab.labelKey);
+    d.dataset.id = tab.id;
+    d.onclick = () => switchTab(tab.id);
     bar.appendChild(d);
   });
 }
