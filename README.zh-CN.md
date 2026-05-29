@@ -1,6 +1,6 @@
 [English](README.md) | **中文**
 
-# File Integrity Checker
+# 文件完整性校验 (File Integrity Checker)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![GitHub Pages](https://img.shields.io/badge/demo-live-brightgreen)](https://tongyi24.github.io/file-integrity-checker/)
