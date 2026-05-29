@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fic-v1';
+const CACHE_NAME = 'fic-v2';
 const ASSETS = ['./index.html', './manifest.json', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -16,11 +16,14 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
+  if (e.request.method !== 'GET') return;
   e.respondWith(
     caches.match(e.request).then(r => r || fetch(e.request).then(resp => {
-      const clone = resp.clone();
-      caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
+      if (resp.ok && new URL(e.request.url).origin === self.location.origin) {
+        const clone = resp.clone();
+        caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
+      }
       return resp;
-    }))
+    }).catch(() => caches.match(e.request)))
   );
 });

@@ -3,6 +3,7 @@
   "short_name": "FIC",
   "description": "Verify file integrity with SHA-256 checksums — offline, private, zero dependencies",
   "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#2c3e50",

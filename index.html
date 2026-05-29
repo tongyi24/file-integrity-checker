@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -103,7 +103,6 @@ body.dark .shortcuts-hint{color:#666}
 <input type="file" id="fi-hc-file" style="display:none">
 
 <script>
-// ==================== SHA-256 ====================
 // ==================== Web Worker SHA-256 ====================
 const WORKER_SRC = `
 const K=new Uint32Array([0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2]);
@@ -115,22 +114,27 @@ const CHUNK=4*1024*1024;
 self.onmessage=async(e)=>{const file=e.data.file;const sha=new S();const size=file.size;let off=0;while(off<size){const end=Math.min(off+CHUNK,size);const buf=await file.slice(off,end).arrayBuffer();sha.update(new Uint8Array(buf));off=end;self.postMessage({type:'p',v:off/size})}self.postMessage({type:'d',hash:sha.hex()})};
 `;
 const _workerURL = URL.createObjectURL(new Blob([WORKER_SRC], { type: 'text/javascript' }));
-let _activeWorker = null, _activeResolve = null;
+let _worker = null;
+let _activeResolve = null, _activeOnProgress = null;
+
+function _getWorker() {
+  if (!_worker) {
+    _worker = new Worker(_workerURL);
+    _worker.onmessage = e => {
+      if (e.data.type === 'p') { if (_activeOnProgress) _activeOnProgress(e.data.v); }
+      else if (e.data.type === 'd') { const r = _activeResolve; _activeResolve = null; _activeOnProgress = null; if (r) r(e.data.hash); }
+    };
+    _worker.onerror = () => { const r = _activeResolve; _activeResolve = null; _activeOnProgress = null; if (r) r(''); };
+  }
+  return _worker;
+}
 
 // ==================== File Utilities ====================
-const CHUNK = 4 * 1024 * 1024;
-
 function hashFile(file, onProgress) {
   return new Promise(resolve => {
-    const w = new Worker(_workerURL);
-    _activeWorker = w;
     _activeResolve = resolve;
-    w.onmessage = e => {
-      if (e.data.type === 'p') { if (onProgress) onProgress(e.data.v); }
-      else if (e.data.type === 'd') { _activeWorker = null; _activeResolve = null; w.terminate(); resolve(e.data.hash); }
-    };
-    w.onerror = () => { _activeWorker = null; _activeResolve = null; w.terminate(); resolve(''); };
-    w.postMessage({ file });
+    _activeOnProgress = onProgress;
+    _getWorker().postMessage({ file });
   });
 }
 
@@ -150,7 +154,16 @@ function collectFolder(input) {
 // ==================== Cache (localStorage) ====================
 const CACHE_KEY = 'fic_cache';
 function loadCache() { try { return JSON.parse(localStorage.getItem(CACHE_KEY) || '{}'); } catch { return {}; } }
-function saveCache(c) { try { localStorage.setItem(CACHE_KEY, JSON.stringify(c)); } catch {} }
+function saveCache(c) {
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify(c)); }
+  catch (e) {
+    if (e instanceof DOMException && e.name === 'QuotaExceededError') {
+      const keys = Object.keys(c);
+      if (keys.length > 100) { for (const k of keys.slice(0, Math.floor(keys.length / 2))) delete c[k]; }
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify(c)); } catch {}
+    }
+  }
+}
 function cacheKey(name, rel, size, mtime) { return `${name}/${rel}|${size}|${mtime}`; }
 
 // ==================== State ====================
@@ -161,7 +174,8 @@ let lastSummary = null;
 
 function stopAll() {
   running = false;
-  if (_activeWorker) { _activeWorker.terminate(); if (_activeResolve) _activeResolve(''); _activeWorker = null; _activeResolve = null; }
+  if (_worker) { _worker.terminate(); _worker = null; }
+  if (_activeResolve) { _activeResolve(''); _activeResolve = null; _activeOnProgress = null; }
 }
 
 // ==================== i18n ====================
@@ -277,6 +291,7 @@ const LANG = {
     progress_hashing_b: 'Hashing File B...',
     progress_done: 'Done.',
     progress_content_matching: 'Content-based matching for remaining files...',
+    progress_processing: 'Processing {0}/{1} files...',
   },
   zh: {
     title: '文件完整性校验',
@@ -389,6 +404,7 @@ const LANG = {
     progress_hashing_b: '正在计算文件 B 的哈希...',
     progress_done: '完成。',
     progress_content_matching: '正在对剩余文件进行内容匹配...',
+    progress_processing: '处理中 {0}/{1} 文件...',
   }
 };
 
@@ -399,21 +415,21 @@ function detectLang() {
 }
 
 let currentLang = detectLang();
-let darkMode = localStorage.getItem('fic_theme');
-if (darkMode === null) darkMode = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+let theme = localStorage.getItem('fic_theme');
+if (theme === null) theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 let cmpViewMode = 'table';
 let currentFilter = 'all';
 let notifyPermRequested = false;
 
 function applyTheme() {
-  document.body.classList.toggle('dark', darkMode === 'dark');
+  document.body.classList.toggle('dark', theme === 'dark');
   const tb = $('theme-btn');
-  if (tb) tb.textContent = darkMode === 'dark' ? '☀️' : '🌙';
+  if (tb) tb.textContent = theme === 'dark' ? '☀️' : '🌙';
 }
 
 function toggleTheme() {
-  darkMode = darkMode === 'dark' ? 'light' : 'dark';
-  localStorage.setItem('fic_theme', darkMode);
+  theme = theme === 'dark' ? 'light' : 'dark';
+  localStorage.setItem('fic_theme', theme);
   applyTheme();
 }
 
@@ -445,7 +461,7 @@ function updateProgressStatus(elId, current, total, label, startTime) {
   const rate = current > 0 ? elapsed / current : 0;
   const remaining = rate > 0 ? (total - current) * rate : 0;
   const eta = formatETA(remaining);
-  let msg = `Processing ${current}/${total} files...`;
+  let msg = t('progress_processing').replace('{0}', current).replace('{1}', total);
   if (label) msg += ' ' + label;
   if (eta) msg += ' ETA: ' + eta;
   $(elId).textContent = msg;
@@ -468,7 +484,7 @@ function playBeep() {
 
 function notifyComplete(body) {
   playBeep();
-  if (document.hidden) {
+  if (document.hidden && typeof Notification !== 'undefined') {
     if (!notifyPermRequested && Notification.permission === 'default') {
       notifyPermRequested = true;
       Notification.requestPermission();
@@ -785,7 +801,7 @@ function addRow(tbody, cols) {
   const tr = document.createElement('tr');
   const status = cols[1];
   tr.dataset.status = status;
-  tr.innerHTML = cols.map((c, i) => `<td>${i === 1 ? statusTag(c) : c}</td>`).join('');
+  tr.innerHTML = cols.map((c, i) => `<td>${i === 1 ? statusTag(c) : escHtml(c)}</td>`).join('');
   tbody.appendChild(tr);
   const wrap = tbody.closest('.results-wrap');
   if (wrap) wrap.scrollTop = wrap.scrollHeight;
@@ -802,9 +818,11 @@ function addGenRow(rel, hash) {
 
 function downloadText(text, filename) {
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+  const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+  a.href = url;
   a.download = filename;
   a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
 // ==================== Tab System ====================
@@ -823,8 +841,8 @@ let activeTab = 'compare';
 
 function switchTab(id) {
   activeTab = id;
-  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.id === id));
-  document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'p-' + id));
+  document.querySelectorAll('.tab').forEach(el => el.classList.toggle('active', el.dataset.id === id));
+  document.querySelectorAll('.panel').forEach(el => el.classList.toggle('active', el.id === 'p-' + id));
 }
 
 function buildTabs() {
@@ -935,7 +953,7 @@ function buildPanels() {
     <div class="card">
       <h3>${t('hc_title')}</h3>
       <div class="field"><label>${t('hc_file')}</label><div class="path-display empty" id="hc-path">${t('drop_file')}</div><button class="btn btn-browse" onclick="$('fi-hc-file').click()">${t('btn_browse')}</button></div>
-      <div class="field"><label>${t('hc_hash')}</label><input type="text" id="hc-expected" placeholder="${t('hc_hash_placeholder')}" style="flex:1;min-width:200px;padding:9px 12px;border:1px solid #d0d0d0;border-radius:8px;font-size:13px;font-family:monospace"></div>
+      <div class="field"><label for="hc-expected">${t('hc_hash')}</label><input type="text" id="hc-expected" placeholder="${t('hc_hash_placeholder')}" aria-label="${t('hc_hash')}" style="flex:1;min-width:200px;padding:9px 12px;border:1px solid #d0d0d0;border-radius:8px;font-size:13px;font-family:monospace"></div>
       <p class="hint">${t('hc_hint')}</p>
       <div class="btn-row">
         <button class="btn btn-primary" id="hc-start" onclick="startHashCheck()">${t('btn_verify_hash')}</button>
@@ -1321,6 +1339,7 @@ async function startCompare() {
     const bByHash = {};
     for (const b of unmatchedBList) { if (!bByHash[b.hash]) bByHash[b.hash] = []; bByHash[b.hash].push(b.rel); }
     const stillMissing = [];
+    const matchedBRels = new Set();
     for (const a of unmatchedA) {
       const cands = bByHash[a.hash];
       if (cands && cands.length) {
@@ -1328,11 +1347,11 @@ async function startCompare() {
         addRow($('cmp-tbody'), [a.rel, 'RELOCATED', `${t('detail_same_content')}: A:${a.rel} = B:${matchRel}`]);
         results.push({ file: a.rel, status: 'RELOCATED', detail: `A:${a.rel} = B:${matchRel}` });
         relocated++;
-        unmatchedBList.splice(unmatchedBList.findIndex(x => x.rel === matchRel), 1);
+        matchedBRels.add(matchRel);
       } else stillMissing.push(a.rel);
     }
     for (const r of stillMissing) { addRow($('cmp-tbody'), [r, 'MISSING_B', t('detail_only_in_a')]); results.push({file:r,status:'MISSING_B',detail:'Only in A'}); }
-    for (const b of unmatchedBList) { addRow($('cmp-tbody'), [b.rel, 'EXTRA', t('detail_only_in_b')]); results.push({file:b.rel,status:'EXTRA',detail:'Only in B'}); }
+    for (const b of unmatchedBList) { if (matchedBRels.has(b.rel)) continue; addRow($('cmp-tbody'), [b.rel, 'EXTRA', t('detail_only_in_b')]); results.push({file:b.rel,status:'EXTRA',detail:'Only in B'}); }
   } else {
     for (const a of unmatchedA) { addRow($('cmp-tbody'), [a.rel, 'MISSING_B', t('detail_only_in_a')]); results.push({file:a.rel,status:'MISSING_B',detail:'Only in A'}); }
     for (const b of unmatchedBList) { addRow($('cmp-tbody'), [b.rel, 'EXTRA', t('detail_only_in_b')]); results.push({file:b.rel,status:'EXTRA',detail:'Only in B'}); }
@@ -1428,11 +1447,12 @@ async function startVerify() {
   for (const line of verCsText.split('\n')) {
     const trimmed = line.trim();
     if (!trimmed) continue;
-    const parts = trimmed.split('  ', 1 + 1);
-    if (parts.length !== 2) continue;
-    let rel = parts[1].trim();
+    const m = trimmed.match(/^([a-fA-F0-9]{64})\s+(.+)$/);
+    if (!m) continue;
+    let rel = m[2].trim();
     if (rel.startsWith('./')) rel = rel.substring(2);
-    entries.push({ expected: parts[0].trim().toUpperCase(), rel });
+    if (rel.startsWith('*')) rel = rel.substring(1);
+    entries.push({ expected: m[1].toUpperCase(), rel });
   }
 
   const fileMap = {};
