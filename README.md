@@ -11,7 +11,7 @@
 
 A portable, browser-based file integrity verification tool. Zero dependencies, zero installation, zero network requests. Just open one HTML file and verify your files.
 
-![Screenshot](docs/screenshot.png)
+![Screenshot](docs/screenshot-en.png)
 
 ## Why This Exists
 
@@ -63,10 +63,10 @@ When verifying files transferred between machines (e.g., Mac → Windows):
 ## How It Works
 
 ```
-                    ┌─────────────┐
-  Select files ───▶ │  Browser    │ ──▶ Results
-  (never leave      │  (local JS) │     (pass/fail)
-   your machine)    └─────────────┘
+                  ┌──────────────┐
+ Select files ──▶ │   Browser    │ ──▶ Results
+ (never leave     │  (local JS)  │    (pass/fail)
+  your machine)   └──────┬───────┘
                          │
                     Pure SHA-256
                     (4MB chunks)
